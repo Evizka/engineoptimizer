@@ -912,27 +912,29 @@ public sealed class ProfilerSystem : ModSystem
         _overlayBuiltAt = PerfData.Now;
     }
 
-    // v0.8.3: реальная клавиша переключения из профиля управления —
-    // раньше в углу панели была жёстко зашита строка "F6" и после
-    // перепривязки врала.
+    // v0.8.7: реальная клавиша через публичный API ModKeybind.GetAssignedKeys
+    // (раньше лезли рефлексией в PlayerInput.CurrentProfile и рисковали
+    // промахнуться по формату имени кейбинда). Длинные списки режем —
+    // подсказка обязана влезать в угол панели.
     private static string KeyHint()
     {
         try
         {
-            var profile = Terraria.GameInput.PlayerInput.CurrentProfile;
-            if (profile != null &&
-                profile.InputModes.TryGetValue(Terraria.GameInput.InputMode.Keyboard, out var configuration) &&
-                configuration.KeyStatus.TryGetValue(ToggleKeyName, out var keys) &&
-                keys.Count > 0)
+            var keys = ToggleKey?.GetAssignedKeys();
+            if (keys != null && keys.Count > 0)
             {
-                return string.Join("/", keys);
+                string hint = string.Join("/", keys);
+                if (hint.Length > 12)
+                    hint = hint.Substring(0, 12);
+                return hint;
             }
+
+            return "-";
         }
         catch
         {
+            return "F6";
         }
-
-        return "F6";
     }
 
     private static void Row(int index, string label, string value, Color color, bool left)

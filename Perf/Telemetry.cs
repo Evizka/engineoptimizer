@@ -23,10 +23,10 @@ public static class Telemetry
     private const double FrameIgnoreMs = 500.0;
 
     private const string SpikeHeader =
-        "time,frame_ms,cpu_update,cpu_draw,light,tiles_walls,bg,dust_ms,proj_ms,npc_ms,items_ms,fps_draw,gc0_s,alloc_mb_s,dust,proj,npc,items,bosses,biome,x,y,vx,vy,hp,dead,gc2_s,gc_pause_ms_s,upd_npc,upd_proj,upd_gore,upd_dust,gore_par_ms,gore_par_n,rain_par_ms,rain_par_n,preload_ms,cause,unacc_ms,proj_top";
+        "time,frame_ms,cpu_update,cpu_draw,light,tiles_walls,bg,dust_ms,proj_ms,npc_ms,items_ms,fps_draw,gc0_s,alloc_mb_s,dust,proj,npc,items,bosses,biome,x,y,vx,vy,hp,dead,gc2_s,gc_pause_ms_s,upd_npc,upd_proj,upd_gore,upd_dust,gore_par_ms,gore_par_n,rain_par_ms,rain_par_n,preload_ms,cause,unacc_ms,proj_top,npc_top";
 
     private const string TimelineHeader =
-        "time,fps_draw,fps_game,ups,frame_avg,frame_p95,frame_max,cpu_update,cpu_draw,light,tiles_walls,bg,dust_ms,proj_ms,npc_ms,items_ms,gc0_s,alloc_mb_s,dust,proj,npc,items,bosses,biome,x,y,gc2_s,gc_pause_ms_s,upd_players,upd_npcs,upd_gores,upd_proj,upd_items,upd_dust,upd_time,upd_world,upd_inv,gore_par_ms,gore_par_n,rain_par_ms,rain_par_n,proc_cpu_pct,threads,section_ms,section_n,preload_pct,cursor_ms,preload_ms,boss_perf,proj_top";
+        "time,fps_draw,fps_game,ups,frame_avg,frame_p95,frame_max,cpu_update,cpu_draw,light,tiles_walls,bg,dust_ms,proj_ms,npc_ms,items_ms,gc0_s,alloc_mb_s,dust,proj,npc,items,bosses,biome,x,y,gc2_s,gc_pause_ms_s,upd_players,upd_npcs,upd_gores,upd_proj,upd_items,upd_dust,upd_time,upd_world,upd_inv,gore_par_ms,gore_par_n,rain_par_ms,rain_par_n,proc_cpu_pct,threads,section_ms,section_n,preload_pct,cursor_ms,preload_ms,boss_perf,proj_top,npc_top";
 
     private static readonly double[] Window = new double[WindowSize];
     private static readonly double[] WindowCopy = new double[WindowSize];
@@ -88,6 +88,7 @@ public static class Telemetry
         public int NpcCount;
         public int ItemCount;
         public string ProjTop;
+        public string NpcTop;
         public string Bosses;
         public string Biome;
         public float X;
@@ -327,6 +328,7 @@ public static class Telemetry
             NpcCount = PerfData.NpcCount,
             ItemCount = PerfData.ItemCount,
             ProjTop = ProjectileTop(100),
+            NpcTop = NpcTop(25),
             Bosses = Bosses(),
             Biome = player != null ? Biome(player) : "?",
             X = player != null ? player.Center.X / 16f : 0f,
@@ -474,6 +476,8 @@ public static class Telemetry
         if (PerfData.ProjectileCount >= 100)
             Str(sb, "projectile_top", ProjectileTop(100));
         Num(sb, "npcs", PerfData.NpcCount);
+        if (PerfData.NpcCount >= 25)
+            Str(sb, "npc_top", NpcTop(25));
         Num(sb, "items", PerfData.ItemCount);
         Num(sb, "spikes_last_60s", spikesLastMinute);
         Num(sb, "preload_spikes_last_60s", preloadSpikesLastMinute);
@@ -609,7 +613,8 @@ public static class Telemetry
         sb.Append(F(PerfData.CursorMs)).Append(',');
         sb.Append(F(WorldPreloader.LastUpdateMs)).Append(',');
         sb.Append(BossPerfMode.Active ? 1 : 0).Append(',');
-        sb.Append(Csv(ProjectileTop(100)));
+        sb.Append(Csv(ProjectileTop(100))).Append(',');
+        sb.Append(Csv(NpcTop(25)));
 
         AsyncFileWriter.Append(path, sb.ToString() + Environment.NewLine, TimelineHeader + Environment.NewLine);
     }
@@ -656,7 +661,8 @@ public static class Telemetry
             F(s.PreloadMs),
             s.Cause ?? "other",
             F(Math.Max(0.0, s.FrameMs - s.UpdateMs - s.DrawMs)),
-            Csv(s.ProjTop)
+            Csv(s.ProjTop),
+            Csv(s.NpcTop)
         });
 
     // Причина спайка: кто был последней миллисекундой, вытолкнувшей кадр
@@ -976,37 +982,17 @@ public static class Telemetry
             }
 
             // топ-3 по количеству, без LINQ
-            int t1 = 0, n1 = 0, t2 = 0, n2 = 0, t3 = 0, n3 = 0;
-            foreach (var kv in counts)
+            return TopThree(counts, names, t =>
             {
-                if (kv.Value > n1)
+                try
                 {
-                    t3 = t2; n3 = n2; t2 = t1; n2 = n1; t1 = kv.Key; n1 = kv.Value;
+                    return Lang.GetProjectileName(t).Value;
                 }
-                else if (kv.Value > n2)
+                catch
                 {
-                    t3 = t2; n3 = n2; t2 = kv.Key; n2 = kv.Value;
+                    return null;
                 }
-                else if (kv.Value > n3)
-                {
-                    t3 = kv.Key; n3 = kv.Value;
-                }
-            }
-
-            var sb = new StringBuilder(64);
-            AppendProjType(sb, t1, n1, names);
-            if (n2 > 0)
-            {
-                if (sb.Length > 0) sb.Append("; ");
-                AppendProjType(sb, t2, n2, names);
-            }
-            if (n3 > 0)
-            {
-                if (sb.Length > 0) sb.Append("; ");
-                AppendProjType(sb, t3, n3, names);
-            }
-
-            return sb.ToString();
+            });
         }
         catch
         {
@@ -1014,24 +1000,102 @@ public static class Telemetry
         }
     }
 
-    private static void AppendProjType(StringBuilder sb, int type, int count, Dictionary<int, string> names)
+    // v0.8.7: топ-NPC — кто ест upd_npc_ms в бою (адды, призывы).
+    // Порог ниже, чем у снарядов: в боях с аддами 25+ NPC — уже норма.
+    private static string NpcTop(int minCount)
     {
-        if (type == 0 || count == 0)
+        if (PerfData.NpcCount < minCount)
+            return "";
+
+        try
+        {
+            var counts = new Dictionary<int, int>(16);
+            var names = new Dictionary<int, string>(16);
+
+            var npcs = Main.npc;
+            for (int i = 0; i < npcs.Length; i++)
+            {
+                var n = npcs[i];
+                if (n == null || !n.active)
+                    continue;
+
+                counts.TryGetValue(n.type, out int c);
+                counts[n.type] = c + 1;
+
+                if (!names.ContainsKey(n.type))
+                {
+                    var mn = n.ModNPC;
+                    if (mn != null)
+                    {
+                        names[n.type] = mn.Mod.Name + ":" + mn.Name;
+                    }
+                    else
+                    {
+                        try
+                        {
+                            names[n.type] = n.TypeName;
+                        }
+                        catch
+                        {
+                            names[n.type] = "";
+                        }
+                    }
+                }
+            }
+
+            return TopThree(counts, names, null);
+        }
+        catch
+        {
+            return "";
+        }
+    }
+
+    private static string TopThree(Dictionary<int, int> counts, Dictionary<int, string> names, Func<int, string> fallbackName)
+    {
+        int t1 = 0, n1 = 0, t2 = 0, n2 = 0, t3 = 0, n3 = 0;
+        foreach (var kv in counts)
+        {
+            if (kv.Value > n1)
+            {
+                t3 = t2; n3 = n2; t2 = t1; n2 = n1; t1 = kv.Key; n1 = kv.Value;
+            }
+            else if (kv.Value > n2)
+            {
+                t3 = t2; n3 = n2; t2 = kv.Key; n2 = kv.Value;
+            }
+            else if (kv.Value > n3)
+            {
+                t3 = kv.Key; n3 = kv.Value;
+            }
+        }
+
+        var sb = new StringBuilder(64);
+        AppendTypeCount(sb, t1, n1, names, fallbackName);
+        if (n2 > 0)
+        {
+            if (sb.Length > 0) sb.Append("; ");
+            AppendTypeCount(sb, t2, n2, names, fallbackName);
+        }
+        if (n3 > 0)
+        {
+            if (sb.Length > 0) sb.Append("; ");
+            AppendTypeCount(sb, t3, n3, names, fallbackName);
+        }
+
+        return sb.ToString();
+    }
+
+    private static void AppendTypeCount(StringBuilder sb, int type, int count, Dictionary<int, string> names, Func<int, string> fallbackName)
+    {
+        if (count == 0)
             return;
 
         sb.Append("type ").Append(type.ToString(Inv));
 
         string name;
         if (!names.TryGetValue(type, out name) || string.IsNullOrEmpty(name))
-        {
-            try
-            {
-                name = Lang.GetProjectileName(type).Value;
-            }
-            catch
-            {
-            }
-        }
+            name = fallbackName != null ? fallbackName(type) : null;
 
         if (!string.IsNullOrEmpty(name))
             sb.Append(" '").Append(name).Append('\'');
