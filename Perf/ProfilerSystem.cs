@@ -214,7 +214,12 @@ public sealed class ProfilerSystem : ModSystem
                 Main.NewText(PerfData.Visible ? "Engine Optimizer: overlay ON" : "Engine Optimizer: overlay OFF", 150, 220, 130);
         }
 
-        WorldPreloader.Update(Settings?.PreloadBudgetMs ?? 8);
+        // v0.8.6: пока идёт бой, предзагрузка мира на паузе — её бюджет
+        // (до PreloadBudgetMs = 3 мс/кадр) нужнее кадру боя. После конца
+        // боя (вместе с linger-окном BossPerfMode) продолжается сама,
+        // с места остановки.
+        if (!BossPerfMode.Active)
+            WorldPreloader.Update(Settings?.PreloadBudgetMs ?? 8);
     }
 
     // ---- тайминги секций тика ----
@@ -712,7 +717,25 @@ public sealed class ProfilerSystem : ModSystem
 
     // Босс в радиусе 8000 px от любого игрока-клиента. Используется и
     // отложенным автосейвом, и BossPerfMode — один проход на всех.
+    // v0.8.6: результат кешируется на один тик обновления — автосейв
+    // (DoUpdate_AutoSave) и BossPerfMode (PostUpdateEverything) зовут
+    // это в пределах одного Update, второй вызов берёт кеш. На сервере
+    // и в одиночной логика одна и та же.
+    private static long _bossScanTick = -1;
+    private static bool _bossScanResult;
+
     internal static bool BossActive()
+    {
+        long tick = Main.GameUpdateCount;
+        if (tick == _bossScanTick)
+            return _bossScanResult;
+
+        _bossScanTick = tick;
+        _bossScanResult = ScanBosses();
+        return _bossScanResult;
+    }
+
+    private static bool ScanBosses()
     {
         var npcs = Main.npc;
         var player = Main.LocalPlayer;

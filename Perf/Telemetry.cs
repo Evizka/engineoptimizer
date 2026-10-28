@@ -114,6 +114,7 @@ public static class Telemetry
         _lastProcCpu = default;
         _lastProcSampleTs = 0;
         ProcessCpuPct = 0;
+        ProcessPriority = "";
         ThreadCount = 0;
 
         try

@@ -176,27 +176,33 @@ public sealed class BossPerfMode : ModSystem
 
         _lastInstallTry = PerfData.Now;
 
+        // v0.8.6: ВАЖНО — секции smoke и tiles независимы. Раньше здесь был
+        // ранний return, если CalamityFables не найден (target == null), и
+        // хуки роста тайлов НЕ ставились совсем. Теперь smoke-цель просто
+        // пропускается (ретрай позже), а tiles ставятся всегда.
         if (wantSmoke)
         {
             try
             {
                 var target = FindMethod(SmokeTypeName, SmokeMethodName);
                 if (target == null)
-                    return; // мод-цель не загружен — попробуем ещё раз позже
-
-                if (!IsSupportedReturnType(target.ReturnType))
+                {
+                    // мод-цель не загружен — попробуем ещё раз позже
+                }
+                else if (!IsSupportedReturnType(target.ReturnType))
                 {
                     _unavailable = true;
                     Log?.Invoke($"Boss perf: {SmokeTypeName}.{SmokeMethodName} has an unsupported return type, smoke skip disabled.");
-                    return;
                 }
+                else
+                {
+                    MonoModHooks.Modify(target, il => EmitEarlyExit(il, target.ReturnType));
+                    _smokeInstalled = true;
+                    // tML сам снимет хук при выгрузке мода (MonoModHooks привязан
+                    // к нашему ModSystem) — Dispose здесь не нужен.
 
-                MonoModHooks.Modify(target, il => EmitEarlyExit(il, target.ReturnType));
-                _smokeInstalled = true;
-                // tML сам снимет хук при выгрузке мода (MonoModHooks привязан
-                // к нашему ModSystem) — Dispose здесь не нужен.
-
-                Log?.Invoke($"Boss perf: early-exit hook installed on {SmokeTypeName}.{SmokeMethodName}.");
+                    Log?.Invoke($"Boss perf: early-exit hook installed on {SmokeTypeName}.{SmokeMethodName}.");
+                }
             }
             catch (Exception e)
             {
