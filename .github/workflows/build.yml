@@ -5,7 +5,8 @@ name: build
 #
 # ВАЖНО: tML-билдер пакует в .tmod всё содержимое папки csproj, поэтому
 # tModLoader и вспомогательные файлы живут в /tmp, а исходники копируются
-# в чистую /tmp/src (иначе .tmod раздувается до 100+ МБ и не пушится).
+# в чистую /tmp/EngineOptimizer — имя папки задаёт имя мода
+# (иначе .tmod раздувается до 100+ МБ и не пушится).
 on:
   push:
     branches-ignore: [ci-build]
@@ -41,31 +42,31 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p /tmp/src
+          mkdir -p /tmp/EngineOptimizer
           rsync -a \
             --exclude '.git/' --exclude '.github/' --exclude 'tools/' \
             --exclude '*.tmod' --exclude 'enabled.json' --exclude 'BTitles_shown.dat' \
             --exclude 'build.ps1' --exclude 'dist/' \
-            "$GITHUB_WORKSPACE/" /tmp/src/
-          echo "--- /tmp/src ---"
-          ls -la /tmp/src
-          du -sh /tmp/src
+            "$GITHUB_WORKSPACE/" /tmp/EngineOptimizer/
+          echo "--- /tmp/EngineOptimizer ---"
+          ls -la /tmp/EngineOptimizer
+          du -sh /tmp/EngineOptimizer
 
       - name: Build mod
         shell: bash
         run: |
           set -euo pipefail
           dotnet --info | head -5
-          dotnet build /tmp/src/EngineOptimizer.csproj -c Release -p:TerrariaSteamPath=/tmp/tML/
+          dotnet build /tmp/EngineOptimizer/EngineOptimizer.csproj -c Release -p:TerrariaSteamPath=/tmp/tML/
 
       - name: Collect output
         shell: bash
         run: |
           set -euo pipefail
           echo "=== ищем .tmod ==="
-          find "$HOME" /tmp/src -name '*.tmod' 2>/dev/null || true
+          find "$HOME" /tmp/EngineOptimizer -name '*.tmod' 2>/dev/null || true
           mkdir -p dist
-          find "$HOME" /tmp/src -name '*.tmod' -exec cp {} dist/ \; || true
+          find "$HOME" /tmp/EngineOptimizer -name '*.tmod' -exec cp {} dist/ \; || true
           ls -la dist
           if [ -z "$(ls dist/*.tmod 2>/dev/null)" ]; then
             echo "::error::.tmod не найден после сборки — смотреть лог Build mod"
