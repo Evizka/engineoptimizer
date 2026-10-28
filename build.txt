@@ -1,0 +1,4 @@
+author = A
+version = 0.8.2
+displayName = Engine Optimizer
+side = Client

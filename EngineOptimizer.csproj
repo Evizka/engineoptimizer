@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <AssemblyName>EngineOptimizer</AssemblyName>
+    <TargetFramework>net8.0</TargetFramework>
+    <PlatformTarget>AnyCPU</PlatformTarget>
+    <LangVersion>latest</LangVersion>
+    <Nullable>disable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <Configurations>Debug;Release</Configurations>
+    <!-- Путь к установленному tModLoader; можно переопределить:
+         dotnet build -p:TerrariaSteamPath="D:\Steam\steamapps\common\tModLoader\" -->
+    <TerrariaSteamPath Condition="'$(TerrariaSteamPath)' == ''">C:\Program Files (x86)\Steam\steamapps\common\tModLoader\</TerrariaSteamPath>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="..\icon.png" Pack="false" />
+    <None Include="..\build.txt" Pack="false" />
+    <None Include="..\description.txt" Pack="false" />
+    <None Include="..\Localization\**\*.hjson" Pack="false" />
+  </ItemGroup>
+
+  <Import Project="$(TerrariaSteamPath)tMLMod.targets" />
+
+</Project>

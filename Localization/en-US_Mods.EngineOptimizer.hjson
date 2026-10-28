@@ -1,0 +1,52 @@
+"Keybinds.Toggle Profiler.DisplayName": Mods.EngineOptimizer.Keybinds.Toggle Profiler.DisplayName
+
+Configs: {
+	OptimizerConfig: {
+		DisplayName: Optimizer Config
+
+		ShowOverlayOnStart: {
+			Label: Show Overlay On Start
+			Tooltip: ""
+		}
+
+		SaveReportOnWorldExit: {
+			Label: Save Report On World Exit
+			Tooltip: ""
+		}
+
+		ReduceGcPauses: {
+			Label: Reduce Gc Pauses
+			Tooltip: ""
+		}
+
+		DeferAutosaveDuringBoss: {
+			Label: Defer Autosave During Boss
+			Tooltip: ""
+		}
+
+		ParallelGore: {
+			Label: Parallel Gore
+			Tooltip: ""
+		}
+
+		ParallelRain: {
+			Label: Parallel Rain
+			Tooltip: ""
+		}
+
+		PreloadWorld: {
+			Label: Preload World
+			Tooltip: ""
+		}
+
+		PreloadBudgetMs: {
+			Label: Preload Budget Ms
+			Tooltip: ""
+		}
+
+		SmoothHardwareCursor: {
+			Label: Smooth Hardware Cursor
+			Tooltip: ""
+		}
+	}
+}

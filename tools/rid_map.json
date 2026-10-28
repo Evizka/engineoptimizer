@@ -1,0 +1,1114 @@
+{
+"1": [
+"EngineOptimizer.EngineOptimizer",
+"Load"
+],
+"2": [
+"EngineOptimizer.EngineOptimizer",
+".ctor"
+],
+"3": [
+"EngineOptimizer.OptimizerConfig",
+"get_Mode"
+],
+"4": [
+"EngineOptimizer.OptimizerConfig",
+"get_ShowOverlayOnStart"
+],
+"5": [
+"EngineOptimizer.OptimizerConfig",
+"set_ShowOverlayOnStart"
+],
+"6": [
+"EngineOptimizer.OptimizerConfig",
+"get_SaveReportOnWorldExit"
+],
+"7": [
+"EngineOptimizer.OptimizerConfig",
+"set_SaveReportOnWorldExit"
+],
+"8": [
+"EngineOptimizer.OptimizerConfig",
+"get_ReduceGcPauses"
+],
+"9": [
+"EngineOptimizer.OptimizerConfig",
+"set_ReduceGcPauses"
+],
+"10": [
+"EngineOptimizer.OptimizerConfig",
+"get_DeferAutosaveDuringBoss"
+],
+"11": [
+"EngineOptimizer.OptimizerConfig",
+"set_DeferAutosaveDuringBoss"
+],
+"12": [
+"EngineOptimizer.OptimizerConfig",
+"get_ParallelGore"
+],
+"13": [
+"EngineOptimizer.OptimizerConfig",
+"set_ParallelGore"
+],
+"14": [
+"EngineOptimizer.OptimizerConfig",
+"get_ParallelRain"
+],
+"15": [
+"EngineOptimizer.OptimizerConfig",
+"set_ParallelRain"
+],
+"16": [
+"EngineOptimizer.OptimizerConfig",
+"get_PreloadWorld"
+],
+"17": [
+"EngineOptimizer.OptimizerConfig",
+"set_PreloadWorld"
+],
+"18": [
+"EngineOptimizer.OptimizerConfig",
+"get_PreloadBudgetMs"
+],
+"19": [
+"EngineOptimizer.OptimizerConfig",
+"set_PreloadBudgetMs"
+],
+"20": [
+"EngineOptimizer.OptimizerConfig",
+"get_SmoothHardwareCursor"
+],
+"21": [
+"EngineOptimizer.OptimizerConfig",
+"set_SmoothHardwareCursor"
+],
+"22": [
+"EngineOptimizer.OptimizerConfig",
+"get_Instance"
+],
+"23": [
+"EngineOptimizer.OptimizerConfig",
+".ctor"
+],
+"24": [
+"EngineOptimizer.Perf.AsyncFileWriter",
+"Start"
+],
+"25": [
+"EngineOptimizer.Perf.AsyncFileWriter",
+"WriteAtomic"
+],
+"26": [
+"EngineOptimizer.Perf.AsyncFileWriter",
+"Append"
+],
+"27": [
+"EngineOptimizer.Perf.AsyncFileWriter",
+"Flush"
+],
+"28": [
+"EngineOptimizer.Perf.AsyncFileWriter",
+"Stop"
+],
+"29": [
+"EngineOptimizer.Perf.AsyncFileWriter",
+"Enqueue"
+],
+"30": [
+"EngineOptimizer.Perf.AsyncFileWriter",
+"Loop"
+],
+"31": [
+"EngineOptimizer.Perf.AsyncFileWriter",
+"Write"
+],
+"32": [
+"EngineOptimizer.Perf.AsyncFileWriter",
+".cctor"
+],
+"33": [
+"EngineOptimizer.Perf.KeybindProfileGuard",
+"Reset"
+],
+"34": [
+"EngineOptimizer.Perf.KeybindProfileGuard",
+"Ensure"
+],
+"35": [
+"EngineOptimizer.Perf.KeybindProfileGuard",
+"Resolve"
+],
+"36": [
+"EngineOptimizer.Perf.KeybindProfileGuard",
+".cctor"
+],
+"37": [
+"EngineOptimizer.Perf.ThreadLocalRandom",
+"get_Local"
+],
+"38": [
+"EngineOptimizer.Perf.ThreadLocalRandom",
+"Next"
+],
+"39": [
+"EngineOptimizer.Perf.ThreadLocalRandom",
+"Next"
+],
+"40": [
+"EngineOptimizer.Perf.ThreadLocalRandom",
+"Next"
+],
+"41": [
+"EngineOptimizer.Perf.ThreadLocalRandom",
+"NextDouble"
+],
+"42": [
+"EngineOptimizer.Perf.ThreadLocalRandom",
+"NextBytes"
+],
+"43": [
+"EngineOptimizer.Perf.ThreadLocalRandom",
+"Sample"
+],
+"44": [
+"EngineOptimizer.Perf.ThreadLocalRandom",
+".ctor"
+],
+"45": [
+"EngineOptimizer.Perf.ThreadLocalRandom",
+".cctor"
+],
+"46": [
+"EngineOptimizer.Perf.ParallelEffects",
+".cctor"
+],
+"47": [
+"EngineOptimizer.Perf.GoreParallel",
+"get_Enabled"
+],
+"48": [
+"EngineOptimizer.Perf.GoreParallel",
+"Reset"
+],
+"49": [
+"EngineOptimizer.Perf.GoreParallel",
+"End"
+],
+"50": [
+"EngineOptimizer.Perf.GoreParallel",
+"ShouldSkip"
+],
+"51": [
+"EngineOptimizer.Perf.GoreParallel",
+"Run"
+],
+"52": [
+"EngineOptimizer.Perf.GoreParallel",
+"UpdateRange"
+],
+"53": [
+"EngineOptimizer.Perf.GoreParallel",
+".cctor"
+],
+"54": [
+"EngineOptimizer.Perf.RainParallel",
+"get_Enabled"
+],
+"55": [
+"EngineOptimizer.Perf.RainParallel",
+"Reset"
+],
+"56": [
+"EngineOptimizer.Perf.RainParallel",
+"End"
+],
+"57": [
+"EngineOptimizer.Perf.RainParallel",
+"ShouldSkip"
+],
+"58": [
+"EngineOptimizer.Perf.RainParallel",
+"Begin"
+],
+"59": [
+"EngineOptimizer.Perf.RainParallel",
+"UpdateRange"
+],
+"60": [
+"EngineOptimizer.Perf.PerfData",
+"get_SmoothedFps"
+],
+"61": [
+"EngineOptimizer.Perf.PerfData",
+"get_Now"
+],
+"62": [
+"EngineOptimizer.Perf.PerfData",
+"PauseSampleReset"
+],
+"63": [
+"EngineOptimizer.Perf.PerfData",
+"MsSince"
+],
+"64": [
+"EngineOptimizer.Perf.PerfData",
+"MsFromTicks"
+],
+"65": [
+"EngineOptimizer.Perf.PerfData",
+"Ema"
+],
+"66": [
+"EngineOptimizer.Perf.PerfData",
+"OnUpdateStart"
+],
+"67": [
+"EngineOptimizer.Perf.PerfData",
+"OnDrawStart"
+],
+"68": [
+"EngineOptimizer.Perf.PerfData",
+"AddUpdateCpu"
+],
+"69": [
+"EngineOptimizer.Perf.PerfData",
+"NoteSave"
+],
+"70": [
+"EngineOptimizer.Perf.PerfData",
+"AddDrawCpu"
+],
+"71": [
+"EngineOptimizer.Perf.PerfData",
+"AddLight"
+],
+"72": [
+"EngineOptimizer.Perf.PerfData",
+"AddTiles"
+],
+"73": [
+"EngineOptimizer.Perf.PerfData",
+"AddWalls"
+],
+"74": [
+"EngineOptimizer.Perf.PerfData",
+"AddBackground"
+],
+"75": [
+"EngineOptimizer.Perf.PerfData",
+"AddDust"
+],
+"76": [
+"EngineOptimizer.Perf.PerfData",
+"AddProjectiles"
+],
+"77": [
+"EngineOptimizer.Perf.PerfData",
+"AddNpcs"
+],
+"78": [
+"EngineOptimizer.Perf.PerfData",
+"AddItems"
+],
+"79": [
+"EngineOptimizer.Perf.PerfData",
+"AddCursor"
+],
+"80": [
+"EngineOptimizer.Perf.PerfData",
+"AddUpdPlayers"
+],
+"81": [
+"EngineOptimizer.Perf.PerfData",
+"AddUpdNpcs"
+],
+"82": [
+"EngineOptimizer.Perf.PerfData",
+"AddUpdGores"
+],
+"83": [
+"EngineOptimizer.Perf.PerfData",
+"AddUpdProjectiles"
+],
+"84": [
+"EngineOptimizer.Perf.PerfData",
+"AddUpdItems"
+],
+"85": [
+"EngineOptimizer.Perf.PerfData",
+"AddUpdDust"
+],
+"86": [
+"EngineOptimizer.Perf.PerfData",
+"AddUpdTime"
+],
+"87": [
+"EngineOptimizer.Perf.PerfData",
+"AddUpdWorld"
+],
+"88": [
+"EngineOptimizer.Perf.PerfData",
+"AddUpdInvasions"
+],
+"89": [
+"EngineOptimizer.Perf.PerfData",
+"AddSectionFrame"
+],
+"90": [
+"EngineOptimizer.Perf.PerfData",
+"SetGoreParallel"
+],
+"91": [
+"EngineOptimizer.Perf.PerfData",
+"SetRainParallel"
+],
+"92": [
+"EngineOptimizer.Perf.PerfData",
+"EndFrame"
+],
+"93": [
+"EngineOptimizer.Perf.PerfData",
+"ResetAccumulators"
+],
+"94": [
+"EngineOptimizer.Perf.PerfData",
+"ResetAll"
+],
+"95": [
+"EngineOptimizer.Perf.PerfData",
+"SampleGc"
+],
+"96": [
+"EngineOptimizer.Perf.PerfData",
+"CountEntities"
+],
+"97": [
+"EngineOptimizer.Perf.PerfData",
+".cctor"
+],
+"98": [
+"EngineOptimizer.Perf.PerfLog",
+"Reset"
+],
+"99": [
+"EngineOptimizer.Perf.PerfLog",
+"Record"
+],
+"100": [
+"EngineOptimizer.Perf.PerfLog",
+"Save"
+],
+"101": [
+"EngineOptimizer.Perf.PerfLog",
+"Append"
+],
+"102": [
+"EngineOptimizer.Perf.PerfLog",
+"Avg"
+],
+"103": [
+"EngineOptimizer.Perf.PerfLog",
+"Max"
+],
+"104": [
+"EngineOptimizer.Perf.PerfLog",
+"Percentile"
+],
+"105": [
+"EngineOptimizer.Perf.PerfLog",
+".cctor"
+],
+"106": [
+"EngineOptimizer.Perf.ProfilerSystem",
+"ResetSectionTimers"
+],
+"107": [
+"EngineOptimizer.Perf.ProfilerSystem",
+"Load"
+],
+"108": [
+"EngineOptimizer.Perf.ProfilerSystem",
+"Unload"
+],
+"109": [
+"EngineOptimizer.Perf.ProfilerSystem",
+"OnWorldLoad"
+],
+"110": [
+"EngineOptimizer.Perf.ProfilerSystem",
+"OnWorldUnload"
+],
+"111": [
+"EngineOptimizer.Perf.ProfilerSystem",
+"PostUpdateEverything"
+],
+"112": [
+"EngineOptimizer.Perf.ProfilerSystem",
+"PreUpdatePlayers"
+],
+"113": [
+"EngineOptimizer.Perf.ProfilerSystem",
+"PostUpdatePlayers"
+],
+"114": [
+"EngineOptimizer.Perf.ProfilerSystem",
+"PreUpdateNPCs"
+],
+"115": [
+"EngineOptimizer.Perf.ProfilerSystem",
+"PostUpdateNPCs"
+],
+"116": [
+"EngineOptimizer.Perf.ProfilerSystem",
+"PreUpdateGores"
+],
+"117": [
+"EngineOptimizer.Perf.ProfilerSystem",
+"PostUpdateGores"
+],
+"118": [
+"EngineOptimizer.Perf.ProfilerSystem",
+"PreUpdateProjectiles"
+],
+"119": [
+"EngineOptimizer.Perf.ProfilerSystem",
+"PostUpdateProjectiles"
+],
+"120": [
+"EngineOptimizer.Perf.ProfilerSystem",
+"PreUpdateItems"
+],
+"121": [
+"EngineOptimizer.Perf.ProfilerSystem",
+"PostUpdateItems"
+],
+"122": [
+"EngineOptimizer.Perf.ProfilerSystem",
+"PreUpdateDusts"
+],
+"123": [
+"EngineOptimizer.Perf.ProfilerSystem",
+"PostUpdateDusts"
+],
+"124": [
+"EngineOptimizer.Perf.ProfilerSystem",
+"PreUpdateTime"
+],
+"125": [
+"EngineOptimizer.Perf.ProfilerSystem",
+"PostUpdateTime"
+],
+"126": [
+"EngineOptimizer.Perf.ProfilerSystem",
+"PreUpdateWorld"
+],
+"127": [
+"EngineOptimizer.Perf.ProfilerSystem",
+"PostUpdateWorld"
+],
+"128": [
+"EngineOptimizer.Perf.ProfilerSystem",
+"PreUpdateInvasions"
+],
+"129": [
+"EngineOptimizer.Perf.ProfilerSystem",
+"PostUpdateInvasions"
+],
+"130": [
+"EngineOptimizer.Perf.ProfilerSystem",
+"ApplyConfig"
+],
+"131": [
+"EngineOptimizer.Perf.ProfilerSystem",
+"ApplyGcSettings"
+],
+"132": [
+"EngineOptimizer.Perf.ProfilerSystem",
+"RestoreGc"
+],
+"133": [
+"EngineOptimizer.Perf.ProfilerSystem",
+"TuneThreadPool"
+],
+"134": [
+"EngineOptimizer.Perf.ProfilerSystem",
+"OnDoUpdate"
+],
+"135": [
+"EngineOptimizer.Perf.ProfilerSystem",
+"OnDoDraw"
+],
+"136": [
+"EngineOptimizer.Perf.ProfilerSystem",
+"OnRenderTiles"
+],
+"137": [
+"EngineOptimizer.Perf.ProfilerSystem",
+"OnRenderTiles2"
+],
+"138": [
+"EngineOptimizer.Perf.ProfilerSystem",
+"OnRenderWalls"
+],
+"139": [
+"EngineOptimizer.Perf.ProfilerSystem",
+"OnRenderBackground"
+],
+"140": [
+"EngineOptimizer.Perf.ProfilerSystem",
+"OnDrawDust"
+],
+"141": [
+"EngineOptimizer.Perf.ProfilerSystem",
+"OnDrawProjectiles"
+],
+"142": [
+"EngineOptimizer.Perf.ProfilerSystem",
+"OnDrawNpcs"
+],
+"143": [
+"EngineOptimizer.Perf.ProfilerSystem",
+"OnDrawItems"
+],
+"144": [
+"EngineOptimizer.Perf.ProfilerSystem",
+"OnLightTiles"
+],
+"145": [
+"EngineOptimizer.Perf.ProfilerSystem",
+"OnAddLight"
+],
+"146": [
+"EngineOptimizer.Perf.ProfilerSystem",
+"OnNewDust"
+],
+"147": [
+"EngineOptimizer.Perf.ProfilerSystem",
+"OnGoreUpdate"
+],
+"148": [
+"EngineOptimizer.Perf.ProfilerSystem",
+"OnRainUpdate"
+],
+"149": [
+"EngineOptimizer.Perf.ProfilerSystem",
+"OnDrawRain"
+],
+"150": [
+"EngineOptimizer.Perf.ProfilerSystem",
+"OnDoUpdateAutoSave"
+],
+"151": [
+"EngineOptimizer.Perf.ProfilerSystem",
+"RunAutoSave"
+],
+"152": [
+"EngineOptimizer.Perf.ProfilerSystem",
+"OnSectionTileFrameWithCheck"
+],
+"153": [
+"EngineOptimizer.Perf.ProfilerSystem",
+"BossActive"
+],
+"154": [
+"EngineOptimizer.Perf.ProfilerSystem",
+"ModifyInterfaceLayers"
+],
+"155": [
+"EngineOptimizer.Perf.ProfilerSystem",
+"DrawPreloadBanner"
+],
+"156": [
+"EngineOptimizer.Perf.ProfilerSystem",
+"DrawOverlay"
+],
+"157": [
+"EngineOptimizer.Perf.ProfilerSystem",
+"DrawBorder"
+],
+"158": [
+"EngineOptimizer.Perf.ProfilerSystem",
+"DrawStat"
+],
+"159": [
+"EngineOptimizer.Perf.ProfilerSystem",
+"BuildOverlayLines"
+],
+"160": [
+"EngineOptimizer.Perf.ProfilerSystem",
+"Row"
+],
+"161": [
+"EngineOptimizer.Perf.ProfilerSystem",
+"FrameBudgetMs"
+],
+"162": [
+"EngineOptimizer.Perf.ProfilerSystem",
+"FpsColor"
+],
+"163": [
+"EngineOptimizer.Perf.ProfilerSystem",
+"FrameColor"
+],
+"164": [
+"EngineOptimizer.Perf.ProfilerSystem",
+"DrawGraph"
+],
+"165": [
+"EngineOptimizer.Perf.ProfilerSystem",
+".ctor"
+],
+"166": [
+"EngineOptimizer.Perf.ProfilerSystem",
+".cctor"
+],
+"167": [
+"EngineOptimizer.Perf.ProfilerSystem",
+"<Load>b__30_0"
+],
+"168": [
+"EngineOptimizer.Perf.ProfilerSystem",
+"<Load>b__30_1"
+],
+"169": [
+"EngineOptimizer.Perf.ProfilerSystem",
+"<Load>b__30_2"
+],
+"170": [
+"EngineOptimizer.Perf.ProfilerSystem",
+"<Load>b__30_3"
+],
+"171": [
+"EngineOptimizer.Perf.SmoothCursorSystem",
+"get_Active"
+],
+"172": [
+"EngineOptimizer.Perf.SmoothCursorSystem",
+"get_Status"
+],
+"173": [
+"EngineOptimizer.Perf.SmoothCursorSystem",
+"Load"
+],
+"174": [
+"EngineOptimizer.Perf.SmoothCursorSystem",
+"Unload"
+],
+"175": [
+"EngineOptimizer.Perf.SmoothCursorSystem",
+"OnWorldLoad"
+],
+"176": [
+"EngineOptimizer.Perf.SmoothCursorSystem",
+"OnDoUpdate"
+],
+"177": [
+"EngineOptimizer.Perf.SmoothCursorSystem",
+"OnDraw"
+],
+"178": [
+"EngineOptimizer.Perf.SmoothCursorSystem",
+"OnDrawCursor"
+],
+"179": [
+"EngineOptimizer.Perf.SmoothCursorSystem",
+"OnDrawThickCursor"
+],
+"180": [
+"EngineOptimizer.Perf.SmoothCursorSystem",
+"OnDrawInterfaceCursor"
+],
+"181": [
+"EngineOptimizer.Perf.SmoothCursorSystem",
+"Update"
+],
+"182": [
+"EngineOptimizer.Perf.SmoothCursorSystem",
+"ShouldRun"
+],
+"183": [
+"EngineOptimizer.Perf.SmoothCursorSystem",
+"ComputeSignature"
+],
+"184": [
+"EngineOptimizer.Perf.SmoothCursorSystem",
+"Mix"
+],
+"185": [
+"EngineOptimizer.Perf.SmoothCursorSystem",
+"Quantize"
+],
+"186": [
+"EngineOptimizer.Perf.SmoothCursorSystem",
+"RenderCursor"
+],
+"187": [
+"EngineOptimizer.Perf.SmoothCursorSystem",
+"DrawThickCursor"
+],
+"188": [
+"EngineOptimizer.Perf.SmoothCursorSystem",
+"DrawColoredCursor"
+],
+"189": [
+"EngineOptimizer.Perf.SmoothCursorSystem",
+"DrawCursorOverride"
+],
+"190": [
+"EngineOptimizer.Perf.SmoothCursorSystem",
+"EnsureTarget"
+],
+"191": [
+"EngineOptimizer.Perf.SmoothCursorSystem",
+"HasVisiblePixel"
+],
+"192": [
+"EngineOptimizer.Perf.SmoothCursorSystem",
+"LooksOpaque"
+],
+"193": [
+"EngineOptimizer.Perf.SmoothCursorSystem",
+"HashPixels"
+],
+"194": [
+"EngineOptimizer.Perf.SmoothCursorSystem",
+"CreateCursor"
+],
+"195": [
+"EngineOptimizer.Perf.SmoothCursorSystem",
+"Deactivate"
+],
+"196": [
+"EngineOptimizer.Perf.SmoothCursorSystem",
+"DisposeTarget"
+],
+"197": [
+"EngineOptimizer.Perf.SmoothCursorSystem",
+"Fail"
+],
+"198": [
+"EngineOptimizer.Perf.SmoothCursorSystem",
+".ctor"
+],
+"199": [
+"EngineOptimizer.Perf.SmoothCursorSystem",
+".cctor"
+],
+"200": [
+"EngineOptimizer.Perf.Telemetry",
+"Reset"
+],
+"201": [
+"EngineOptimizer.Perf.Telemetry",
+"get_Dir"
+],
+"202": [
+"EngineOptimizer.Perf.Telemetry",
+"Rotate"
+],
+"203": [
+"EngineOptimizer.Perf.Telemetry",
+"TrimArchives"
+],
+"204": [
+"EngineOptimizer.Perf.Telemetry",
+"Flush"
+],
+"205": [
+"EngineOptimizer.Perf.Telemetry",
+"WriteSession"
+],
+"206": [
+"EngineOptimizer.Perf.Telemetry",
+"RecordFrame"
+],
+"207": [
+"EngineOptimizer.Perf.Telemetry",
+"RecordFrameCore"
+],
+"208": [
+"EngineOptimizer.Perf.Telemetry",
+"AddSpike"
+],
+"209": [
+"EngineOptimizer.Perf.Telemetry",
+"SampleProcess"
+],
+"210": [
+"EngineOptimizer.Perf.Telemetry",
+"WriteLive"
+],
+"211": [
+"EngineOptimizer.Perf.Telemetry",
+"FlushSpikes"
+],
+"212": [
+"EngineOptimizer.Perf.Telemetry",
+"AppendTimeline"
+],
+"213": [
+"EngineOptimizer.Perf.Telemetry",
+"ToCsv"
+],
+"214": [
+"EngineOptimizer.Perf.Telemetry",
+"ClassifySpike"
+],
+"215": [
+"EngineOptimizer.Perf.Telemetry",
+"get_SpikesLastMinute"
+],
+"216": [
+"EngineOptimizer.Perf.Telemetry",
+"get_PreloadSpikesLastMinute"
+],
+"217": [
+"EngineOptimizer.Perf.Telemetry",
+"CountSpikesLastMinute"
+],
+"218": [
+"EngineOptimizer.Perf.Telemetry",
+"AvgWindow"
+],
+"219": [
+"EngineOptimizer.Perf.Telemetry",
+"MaxWindow"
+],
+"220": [
+"EngineOptimizer.Perf.Telemetry",
+"PercentileWindow"
+],
+"221": [
+"EngineOptimizer.Perf.Telemetry",
+"ParallelState"
+],
+"222": [
+"EngineOptimizer.Perf.Telemetry",
+"Dominant"
+],
+"223": [
+"EngineOptimizer.Perf.Telemetry",
+"DominantUpdateSection"
+],
+"224": [
+"EngineOptimizer.Perf.Telemetry",
+"Bosses"
+],
+"225": [
+"EngineOptimizer.Perf.Telemetry",
+"Biome"
+],
+"226": [
+"EngineOptimizer.Perf.Telemetry",
+"Str"
+],
+"227": [
+"EngineOptimizer.Perf.Telemetry",
+"Num"
+],
+"228": [
+"EngineOptimizer.Perf.Telemetry",
+"Bool"
+],
+"229": [
+"EngineOptimizer.Perf.Telemetry",
+"F"
+],
+"230": [
+"EngineOptimizer.Perf.Telemetry",
+"Escape"
+],
+"231": [
+"EngineOptimizer.Perf.Telemetry",
+"Csv"
+],
+"232": [
+"EngineOptimizer.Perf.Telemetry",
+".cctor"
+],
+"233": [
+"EngineOptimizer.Perf.WorldPreloader",
+"get_Active"
+],
+"234": [
+"EngineOptimizer.Perf.WorldPreloader",
+"set_Active"
+],
+"235": [
+"EngineOptimizer.Perf.WorldPreloader",
+"get_Failed"
+],
+"236": [
+"EngineOptimizer.Perf.WorldPreloader",
+"set_Failed"
+],
+"237": [
+"EngineOptimizer.Perf.WorldPreloader",
+"get_Done"
+],
+"238": [
+"EngineOptimizer.Perf.WorldPreloader",
+"set_Done"
+],
+"239": [
+"EngineOptimizer.Perf.WorldPreloader",
+"get_Total"
+],
+"240": [
+"EngineOptimizer.Perf.WorldPreloader",
+"set_Total"
+],
+"241": [
+"EngineOptimizer.Perf.WorldPreloader",
+"get_Percent"
+],
+"242": [
+"EngineOptimizer.Perf.WorldPreloader",
+"get_EstimatedSecondsLeft"
+],
+"243": [
+"EngineOptimizer.Perf.WorldPreloader",
+"get_TotalMs"
+],
+"244": [
+"EngineOptimizer.Perf.WorldPreloader",
+"set_TotalMs"
+],
+"245": [
+"EngineOptimizer.Perf.WorldPreloader",
+"get_MaxSectionMs"
+],
+"246": [
+"EngineOptimizer.Perf.WorldPreloader",
+"set_MaxSectionMs"
+],
+"247": [
+"EngineOptimizer.Perf.WorldPreloader",
+"get_FramedSections"
+],
+"248": [
+"EngineOptimizer.Perf.WorldPreloader",
+"set_FramedSections"
+],
+"249": [
+"EngineOptimizer.Perf.WorldPreloader",
+"get_AverageSectionMs"
+],
+"250": [
+"EngineOptimizer.Perf.WorldPreloader",
+"get_Seconds"
+],
+"251": [
+"EngineOptimizer.Perf.WorldPreloader",
+"get_EffectiveBudgetMs"
+],
+"252": [
+"EngineOptimizer.Perf.WorldPreloader",
+"set_EffectiveBudgetMs"
+],
+"253": [
+"EngineOptimizer.Perf.WorldPreloader",
+"get_LastUpdateMs"
+],
+"254": [
+"EngineOptimizer.Perf.WorldPreloader",
+"set_LastUpdateMs"
+],
+"255": [
+"EngineOptimizer.Perf.WorldPreloader",
+"Reset"
+],
+"256": [
+"EngineOptimizer.Perf.WorldPreloader",
+"Begin"
+],
+"257": [
+"EngineOptimizer.Perf.WorldPreloader",
+"Update"
+],
+"258": [
+"EngineOptimizer.Perf.WorldPreloader",
+"AddWork"
+],
+"259": [
+"EngineOptimizer.Perf.WorldPreloader",
+"StartNextSection"
+],
+"260": [
+"EngineOptimizer.Perf.WorldPreloader",
+"Finish"
+],
+"261": [
+"EngineOptimizer.Perf.WorldPreloader",
+"ResetSectionCursor"
+],
+"262": [
+"EngineOptimizer.Perf.WorldPreloader",
+"BeginNoMapUpdate"
+],
+"263": [
+"EngineOptimizer.Perf.WorldPreloader",
+"EndNoMapUpdate"
+],
+"264": [
+"EngineOptimizer.Perf.WorldPreloader",
+"BossNearby"
+],
+"265": [
+"EngineOptimizer.Perf.WorldPreloader",
+".cctor"
+],
+"266": [
+"Worker",
+".ctor"
+],
+"267": [
+"<>c__DisplayClass9_0",
+".ctor"
+],
+"268": [
+"<>c__DisplayClass9_0",
+"<Start>b__0"
+],
+"269": [
+"<>c",
+".cctor"
+],
+"270": [
+"<>c",
+".ctor"
+],
+"271": [
+"<>c",
+"<ModifyInterfaceLayers>b__77_0"
+],
+"272": [
+"Spike",
+".ctor"
+],
+"273": [
+"<>c",
+".cctor"
+],
+"274": [
+"<>c",
+".ctor"
+],
+"275": [
+"<>c",
+"<TrimArchives>b__30_0"
+],
+"276": [
+"<>c",
+".cctor"
+],
+"277": [
+"<>c",
+".ctor"
+],
+"278": [
+"<>c",
+"<Begin>b__64_0"
+]
+}

@@ -1,0 +1,27 @@
+Diagnostics and engine-level patches for tModLoader.
+
+Frame profiling: draw-to-draw FPS, frame time, update/draw split, present/other,
+lighting, tiles, walls, background, dust, projectiles, NPC and item draw time,
+per-section update timings, GC activity, allocation rate, entity counts.
+
+On-disk diagnostics: live.json (1 s snapshot), timeline.csv (5 s rows),
+spikes.csv (every frame over 25 ms with its dominant cause: preload / save / GC /
+section / GPU / update / draw, plus the actual preload slice) and profile-*.csv
+on world exit. Session time stays valid in the menu before the first world load.
+
+Smoothness: SustainedLowLatency GC, whole-world tile-frame preload on entry with
+an adaptive per-frame budget (configured value is the ceiling; only free frame
+headroom is used, checked after every tile), autosave postponed during boss
+fights, asynchronous telemetry I/O, cached overlay.
+
+Parallelism: vanilla gore on the thread pool (visual only), lightning already uses
+vanilla FastParallel, telemetry on a background thread. Rain parallelism is
+experimental and off by default. Gameplay simulation (NPC / projectiles / tiles /
+liquids) is never parallelized - it is unsafe in Terraria.
+
+Also fills in missing mod keybind profile entries so mods that read their keybind
+on world entry cannot crash the game when it boots straight into a world.
+Optional hardware OS cursor refreshed at 20 Hz (~0.4 ms/frame; off if another
+cursor mod is used).
+
+Press F6 to toggle the overlay. Use launch-multicore.bat for server GC.
