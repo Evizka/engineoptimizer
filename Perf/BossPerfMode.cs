@@ -41,9 +41,9 @@ public sealed class BossPerfMode : ModSystem
     public static bool Active { get; private set; }
 
     // true — IL-хук на дым установлен (мод CalamityFables найден).
-    public static bool SmokeHooked => _hook != null;
+    public static bool SmokeHooked => _installed;
 
-    private static ILHook _hook;
+    private static bool _installed;
     private static bool _unavailable;
     private static long _lastInstallTry;
     private static long _lastBossSeen;
@@ -59,7 +59,6 @@ public sealed class BossPerfMode : ModSystem
     public override void Unload()
     {
         RestoreEffects();
-        DisposeHook();
         Reset();
     }
 
@@ -181,7 +180,7 @@ public sealed class BossPerfMode : ModSystem
                 return;
             }
 
-            _hook = new ILHook(target, il =>
+            MonoModHooks.Modify(target, il =>
             {
                 // ret на входе: пока идёт бой, тело метода не выполняется.
                 var c = new ILCursor(il);
@@ -191,6 +190,9 @@ public sealed class BossPerfMode : ModSystem
                 c.Emit(OpCodes.Ret);
                 c.MarkLabel(run);
             });
+            _installed = true;
+            // tML сам снимет хук при выгрузке мода (MonoModHooks привязан
+            // к нашему ModSystem) — Dispose здесь не нужен.
 
             Log?.Invoke($"Boss perf: early-exit hook installed on {SmokeTypeName}.{SmokeMethodName}.");
         }
@@ -234,21 +236,9 @@ public sealed class BossPerfMode : ModSystem
         return null;
     }
 
-    private static void DisposeHook()
-    {
-        try
-        {
-            _hook?.Dispose();
-        }
-        catch
-        {
-        }
-
-        _hook = null;
-    }
-
     private static void Reset()
     {
+        _installed = false;
         _unavailable = false;
         _lastInstallTry = 0;
         _lastBossSeen = 0;
