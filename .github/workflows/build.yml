@@ -45,11 +45,24 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          echo "=== ищем .tmod по всей системе ==="
+          find / -name '*.tmod' -not -path '/proc/*' -not -path '/sys/*' 2>/dev/null | head -20 || true
+          echo "=== HOME/.local/share ==="
+          ls -laR "$HOME/.local/share/Terraria" 2>/dev/null | head -60 || true
+          echo "=== HOME/Documents ==="
+          find "$HOME/Documents" -maxdepth 4 2>/dev/null | head -40 || true
+          echo "=== workspace .tmod ==="
+          find "$GITHUB_WORKSPACE" -name '*.tmod' || true
+          echo "=== логи tML ==="
+          find / -path /proc -prune -o -iname '*.log' -path '*Terraria*' -print 2>/dev/null | head -10 || true
+          find / -path /proc -prune -o -iname '*.log' -path '*tModLoader*' -print 2>/dev/null | head -10 || true
+
           mkdir -p dist
-          # свежий .tmod лежит в tML/Mods/
-          find "$GITHUB_WORKSPACE/tML" -name '*.tmod' -exec cp {} dist/ \; || true
-          echo "--- найденные tmod ---"
-          find "$GITHUB_WORKSPACE" -name '*.tmod' -not -path '*/dist/*' || true
+          # старый .tmod из checkout лежит в корне workspace — исключаем его
+          find / -name '*.tmod' -not -path '/proc/*' -not -path '/sys/*' \
+               -not -path "$GITHUB_WORKSPACE/EngineOptimizer.tmod" \
+               -not -path '*/obj/*' -not -path '*/bin/*' 2>/dev/null \
+               -exec cp {} dist/ \; || true
           echo "--- dist ---"
           ls -la dist
 
