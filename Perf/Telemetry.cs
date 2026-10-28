@@ -6,6 +6,7 @@ using System.IO;
 using System.Text;
 using System.Threading;
 using Terraria;
+using Terraria.Localization;
 using Terraria.ModLoader;
 
 namespace EngineOptimizer.Perf;
@@ -22,10 +23,10 @@ public static class Telemetry
     private const double FrameIgnoreMs = 500.0;
 
     private const string SpikeHeader =
-        "time,frame_ms,cpu_update,cpu_draw,light,tiles_walls,bg,dust_ms,proj_ms,npc_ms,items_ms,fps_draw,gc0_s,alloc_mb_s,dust,proj,npc,items,bosses,biome,x,y,vx,vy,hp,dead,gc2_s,gc_pause_ms_s,upd_npc,upd_proj,upd_gore,upd_dust,gore_par_ms,gore_par_n,rain_par_ms,rain_par_n,preload_ms,cause,unacc_ms";
+        "time,frame_ms,cpu_update,cpu_draw,light,tiles_walls,bg,dust_ms,proj_ms,npc_ms,items_ms,fps_draw,gc0_s,alloc_mb_s,dust,proj,npc,items,bosses,biome,x,y,vx,vy,hp,dead,gc2_s,gc_pause_ms_s,upd_npc,upd_proj,upd_gore,upd_dust,gore_par_ms,gore_par_n,rain_par_ms,rain_par_n,preload_ms,cause,unacc_ms,proj_top";
 
     private const string TimelineHeader =
-        "time,fps_draw,fps_game,ups,frame_avg,frame_p95,frame_max,cpu_update,cpu_draw,light,tiles_walls,bg,dust_ms,proj_ms,npc_ms,items_ms,gc0_s,alloc_mb_s,dust,proj,npc,items,bosses,biome,x,y,gc2_s,gc_pause_ms_s,upd_players,upd_npcs,upd_gores,upd_proj,upd_items,upd_dust,upd_time,upd_world,upd_inv,gore_par_ms,gore_par_n,rain_par_ms,rain_par_n,proc_cpu_pct,threads,section_ms,section_n,preload_pct,cursor_ms,preload_ms,boss_perf";
+        "time,fps_draw,fps_game,ups,frame_avg,frame_p95,frame_max,cpu_update,cpu_draw,light,tiles_walls,bg,dust_ms,proj_ms,npc_ms,items_ms,gc0_s,alloc_mb_s,dust,proj,npc,items,bosses,biome,x,y,gc2_s,gc_pause_ms_s,upd_players,upd_npcs,upd_gores,upd_proj,upd_items,upd_dust,upd_time,upd_world,upd_inv,gore_par_ms,gore_par_n,rain_par_ms,rain_par_n,proc_cpu_pct,threads,section_ms,section_n,preload_pct,cursor_ms,preload_ms,boss_perf,proj_top";
 
     private static readonly double[] Window = new double[WindowSize];
     private static readonly double[] WindowCopy = new double[WindowSize];
@@ -85,6 +86,7 @@ public static class Telemetry
         public int ProjectileCount;
         public int NpcCount;
         public int ItemCount;
+        public string ProjTop;
         public string Bosses;
         public string Biome;
         public float X;
@@ -322,6 +324,7 @@ public static class Telemetry
             ProjectileCount = PerfData.ProjectileCount,
             NpcCount = PerfData.NpcCount,
             ItemCount = PerfData.ItemCount,
+            ProjTop = ProjectileTop(100),
             Bosses = Bosses(),
             Biome = player != null ? Biome(player) : "?",
             X = player != null ? player.Center.X / 16f : 0f,
@@ -455,6 +458,8 @@ public static class Telemetry
         Bool(sb, "preload_active", WorldPreloader.Active);
         Num(sb, "dust", PerfData.DustCount);
         Num(sb, "projectiles", PerfData.ProjectileCount);
+        if (PerfData.ProjectileCount >= 100)
+            Str(sb, "projectile_top", ProjectileTop(100));
         Num(sb, "npcs", PerfData.NpcCount);
         Num(sb, "items", PerfData.ItemCount);
         Num(sb, "spikes_last_60s", spikesLastMinute);
@@ -590,7 +595,8 @@ public static class Telemetry
         sb.Append(F(WorldPreloader.Percent)).Append(',');
         sb.Append(F(PerfData.CursorMs)).Append(',');
         sb.Append(F(WorldPreloader.LastUpdateMs)).Append(',');
-        sb.Append(BossPerfMode.Active ? 1 : 0);
+        sb.Append(BossPerfMode.Active ? 1 : 0).Append(',');
+        sb.Append(Csv(ProjectileTop(100)));
 
         AsyncFileWriter.Append(path, sb.ToString() + Environment.NewLine, TimelineHeader + Environment.NewLine);
     }
@@ -636,7 +642,8 @@ public static class Telemetry
             s.RainParN.ToString(Inv),
             F(s.PreloadMs),
             s.Cause ?? "other",
-            F(Math.Max(0.0, s.FrameMs - s.UpdateMs - s.DrawMs))
+            F(Math.Max(0.0, s.FrameMs - s.UpdateMs - s.DrawMs)),
+            Csv(s.ProjTop)
         });
 
     // Причина спайка: кто был последней миллисекундой, вытолкнувшей кадр
@@ -919,5 +926,103 @@ public static class Telemetry
             return "\"" + value.Replace("\"", "\"\"") + "\"";
 
         return value;
+    }
+
+    // v0.8.4: когда снарядов аномально много (>= minCount, по умолчанию
+    // 100 — норма в бою заметно ниже), возвращаем топ-3 типа с количеством
+    // и именем: для модовых — «Мод:Класс», для ванильных — локализованное
+    // имя. Ровно этот разбор нужен, чтобы объяснить аномалию «213
+    // снарядов» из старых трасс: сейчас видно только общее число, но не
+    // ЧЬИ снаряды. Считается не каждый кадр, а в момент записи
+    // live.json / timeline / spike — микросекунды.
+    private static string ProjectileTop(int minCount)
+    {
+        if (PerfData.ProjectileCount < minCount)
+            return "";
+
+        try
+        {
+            var counts = new Dictionary<int, int>(16);
+            var names = new Dictionary<int, string>(16);
+
+            var projectiles = Main.projectile;
+            for (int i = 0; i < projectiles.Length; i++)
+            {
+                var p = projectiles[i];
+                if (p == null || !p.active)
+                    continue;
+
+                counts.TryGetValue(p.type, out int c);
+                counts[p.type] = c + 1;
+
+                if (!names.ContainsKey(p.type))
+                {
+                    var mp = p.ModProjectile;
+                    names[p.type] = mp != null ? mp.Mod.Name + ":" + mp.Name : "";
+                }
+            }
+
+            // топ-3 по количеству, без LINQ
+            int t1 = 0, n1 = 0, t2 = 0, n2 = 0, t3 = 0, n3 = 0;
+            foreach (var kv in counts)
+            {
+                if (kv.Value > n1)
+                {
+                    t3 = t2; n3 = n2; t2 = t1; n2 = n1; t1 = kv.Key; n1 = kv.Value;
+                }
+                else if (kv.Value > n2)
+                {
+                    t3 = t2; n3 = n2; t2 = kv.Key; n2 = kv.Value;
+                }
+                else if (kv.Value > n3)
+                {
+                    t3 = kv.Key; n3 = kv.Value;
+                }
+            }
+
+            var sb = new StringBuilder(64);
+            AppendProjType(sb, t1, n1, names);
+            if (n2 > 0)
+            {
+                if (sb.Length > 0) sb.Append("; ");
+                AppendProjType(sb, t2, n2, names);
+            }
+            if (n3 > 0)
+            {
+                if (sb.Length > 0) sb.Append("; ");
+                AppendProjType(sb, t3, n3, names);
+            }
+
+            return sb.ToString();
+        }
+        catch
+        {
+            return "";
+        }
+    }
+
+    private static void AppendProjType(StringBuilder sb, int type, int count, Dictionary<int, string> names)
+    {
+        if (type == 0 || count == 0)
+            return;
+
+        sb.Append("type ").Append(type.ToString(Inv));
+
+        string name;
+        if (!names.TryGetValue(type, out name) || string.IsNullOrEmpty(name))
+        {
+            try
+            {
+                name = Lang.GetProjectileName(type).Value;
+            }
+            catch
+            {
+            }
+        }
+
+        if (!string.IsNullOrEmpty(name))
+            sb.Append(" '").Append(name).Append('\'');
+
+        sb.Append(" x").Append(count.ToString(Inv));
     }
 }

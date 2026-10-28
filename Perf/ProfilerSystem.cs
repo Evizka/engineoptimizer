@@ -659,7 +659,9 @@ public sealed class ProfilerSystem : ModSystem
             PerfData.AddSectionFrame(ms);
     }
 
-    private static bool BossActive()
+    // Босс в радиусе 8000 px от любого игрока-клиента. Используется и
+    // отложенным автосейвом, и BossPerfMode — один проход на всех.
+    internal static bool BossActive()
     {
         var npcs = Main.npc;
         var player = Main.LocalPlayer;
@@ -824,7 +826,10 @@ public sealed class ProfilerSystem : ModSystem
         Row(3, "section", $"{PerfData.SectionMs:0.0} ms", Color.Gainsboro, false);
         Row(4, "parallel gore", $"{PerfData.GoreParallelMs:0.00} ms / {PerfData.GoreParallelCount}",
             GoreParallel.Failed ? Color.OrangeRed : Color.Gainsboro, false);
-        Row(5, "dust / proj / npc", $"{PerfData.DustCount} / {PerfData.ProjectileCount} / {PerfData.NpcCount}", Color.Gainsboro, false);
+        // Подсветка аномального числа снарядов (>150): в игру столько
+        // одновременно почти не бывает — см. projectile_top в live.json.
+        Row(5, "dust / proj / npc", $"{PerfData.DustCount} / {PerfData.ProjectileCount} / {PerfData.NpcCount}",
+            PerfData.ProjectileCount > 150 ? Color.Gold : Color.Gainsboro, false);
         Row(6, "proc / threads", $"{Telemetry.ProcessCpuPct:0}%  {Telemetry.ThreadCount} thr", Color.Gainsboro, false);
         Row(7, "boss perf",
             BossPerfMode.Active

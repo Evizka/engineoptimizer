@@ -64,6 +64,9 @@ public sealed class BossPerfMode : ModSystem
 
     public override void OnWorldLoad()
     {
+        // Не тянем состояние боя из прошлого мира (linger-таймер).
+        _lastBossSeen = 0;
+
         // К этому моменту сборки всех включённых модов уже загружены.
         TryInstall();
     }
@@ -118,32 +121,9 @@ public sealed class BossPerfMode : ModSystem
         }
     }
 
-    // Босс в радиусе 8000 px от игрока — та же логика, что у отложенного
-    // автосейва в ProfilerSystem.
-    private static bool ScanBoss()
-    {
-        var npcs = Main.npc;
-        var player = Main.LocalPlayer;
-        if (npcs == null || player == null)
-            return false;
-
-        float px = player.Center.X;
-        float py = player.Center.Y;
-
-        for (int i = 0; i < npcs.Length; i++)
-        {
-            var npc = npcs[i];
-            if (!npc.active || !npc.boss || npc.friendly)
-                continue;
-
-            float dx = npc.Center.X - px;
-            float dy = npc.Center.Y - py;
-            if (dx * dx + dy * dy <= 64000000f)
-                return true;
-        }
-
-        return false;
-    }
+    // Босс в радиусе 8000 px — общий проход с отложенным автосейвом
+    // (ProfilerSystem.BossActive), чтобы не сканировать npc-таблицу дважды.
+    private static bool ScanBoss() => ProfilerSystem.BossActive();
 
     private static void RestoreEffects()
     {
