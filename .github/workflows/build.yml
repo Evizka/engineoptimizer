@@ -76,13 +76,39 @@ jobs:
       - name: Push .tmod to ci-build branch
         if: ${{ hashFiles('dist/*.tmod') != '' }}
         shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          set -euo pipefail
+          set -uo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git checkout --orphan ci-build
-          git rm -rf --quiet . || true
-          cp dist/*.tmod .
-          git add -f *.tmod
-          git commit -m "EngineOptimizer build of ${GITHUB_SHA::12}"
-          git push --force origin ci-build
+
+          step() { if out=$(eval "$1" 2>&1); then echo "[ok] $2"; else echo "::error::$2: $(echo "$out" | tr '\n' ' ' | head -c 220)"; exit 1; fi }
+
+          step "git checkout --orphan ci-build" "checkout-orphan"
+          step "git rm -rf -q ." "git-rm"
+          step "cp dist/*.tmod ." "copy-tmod"
+          step "git add -f *.tmod" "git-add"
+          step "git commit -m 'EngineOptimizer build of ${GITHUB_SHA::12}'" "commit"
+
+          if out=$(git push --force origin ci-build 2>&1); then
+            echo "[ok] push"
+          else
+            echo "::warning::git push failed ($(echo "$out" | tr '\n' ' ' | head -c 220)) — trying Contents API"
+            # Фолбэк: ветка + файл через GitHub API (gh есть на раннере).
+            REPO="repos/${GITHUB_REPOSITORY}"
+            BASE=$(gh api "$REPO/git/ref/heads/main" --jq .object.sha)
+            if ! gh api "$REPO/git/ref/heads/ci-build" >/dev/null 2>&1; then
+              gh api "$REPO/git/refs" -f ref="refs/heads/ci-build" -f sha="$BASE" >/dev/null
+            fi
+            for F in *.tmod; do
+              B64=$(base64 -w0 "$F")
+              EXISTING=$(gh api "$REPO/contents/$F?ref=ci-build" --jq .sha 2>/dev/null || true)
+              if [ -n "$EXISTING" ]; then
+                gh api -X PUT "$REPO/contents/$F" -f message="EngineOptimizer build of ${GITHUB_SHA::12}" -f content="$B64" -f branch=ci-build -f sha="$EXISTING" >/dev/null
+              else
+                gh api -X PUT "$REPO/contents/$F" -f message="EngineOptimizer build of ${GITHUB_SHA::12}" -f content="$B64" -f branch=ci-build >/dev/null
+              fi
+            done
+            echo "[ok] uploaded via API"
+          fi
