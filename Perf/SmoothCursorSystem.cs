@@ -198,8 +198,8 @@ public sealed class SmoothCursorSystem : ModSystem
         if (over >= 0 && over >= TextureAssets.Cursors.Length)
             over = -1;
 
-        int hotX;
-        int hotY;
+        int hotX = 0;
+        int hotY = 0;
         ulong signature = ComputeSignature(over, ref hotX, ref hotY);
 
         // Ничего не изменилось: достаточно убедиться, что системный курсор наш.
@@ -283,7 +283,7 @@ public sealed class SmoothCursorSystem : ModSystem
         if (Main.gameMenu || Main.alreadyGrabbingSunOrMoon)
             return false;
 
-        if (SettingsForUI.ShowGamepadCursor)
+        if (PlayerInput.SettingsForUI.ShowGamepadCursor)
             return false;
 
         return true;
@@ -516,7 +516,7 @@ public sealed class SmoothCursorSystem : ModSystem
         try
         {
             surface = SDL.SDL_CreateRGBSurfaceFrom(handle.AddrOfPinnedObject(), width, height, 32, width * 4,
-                255, 65280, 16711680, -16777216);
+                255u, 65280u, 16711680u, 0xFF000000u);
             if (surface == IntPtr.Zero)
                 return IntPtr.Zero;
 

@@ -301,7 +301,7 @@ public static class WorldPreloader
             if (Main.sectionManager.SectionFramed(section.X, section.Y))
                 continue;
 
-            WorldGen.GetSectionBounds(section.X, section.Y,
+            WorldGen.GetSectionBounds(section.X, section.Y, section.X, section.Y,
                 out int tileStartX, out int tileEndX, out int tileStartY, out int tileEndY);
 
             _curX = section.X;
