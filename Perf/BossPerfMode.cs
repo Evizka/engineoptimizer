@@ -80,7 +80,7 @@ public sealed class BossPerfMode : ModSystem
 
         // Повторные попытки поставить хук — на случай поздней загрузки
         // сборки-цели. Редко и дёшево: один рефлексивный поиск в 10 с.
-        if (_hook == null && !_unavailable && PerfData.MsSince(_lastInstallTry) >= 10000.0)
+        if (!_installed && !_unavailable && PerfData.MsSince(_lastInstallTry) >= 10000.0)
             TryInstall();
 
         var config = OptimizerConfig.Instance;
@@ -162,7 +162,7 @@ public sealed class BossPerfMode : ModSystem
 
     private static void TryInstall()
     {
-        if (_hook != null || _unavailable)
+        if (_installed || _unavailable)
             return;
 
         _lastInstallTry = PerfData.Now;
