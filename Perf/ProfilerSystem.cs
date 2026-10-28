@@ -16,6 +16,8 @@ namespace EngineOptimizer.Perf;
 // предзагрузки. Отключение автосейва и переключение оверлея живут здесь.
 public sealed class ProfilerSystem : ModSystem
 {
+    private const string ToggleKeyName = "Toggle Profiler";
+
     public static ModKeybind ToggleKey;
 
     private static OptimizerConfig Settings;
@@ -25,7 +27,7 @@ public sealed class ProfilerSystem : ModSystem
     private bool _threadPoolTuned;
     private GCLatencyMode _previousLatency;
 
-    private const int OverlayRows = 7;
+    private const int OverlayRows = 8;
 
     // Оверлей кешируется: строки пересобираются 4 раза в секунду.
     private static readonly string[] OverlayLabelsLeft = new string[OverlayRows];
@@ -38,6 +40,7 @@ public sealed class ProfilerSystem : ModSystem
     private static string _overlayFps = "";
     private static string _overlayFrame = "";
     private static string _overlayGame = "";
+    private static string _overlayKeyHint = "F6";
     private static Color _overlayFpsColor = Color.White;
     private static Color _overlayFrameColor = Color.Gainsboro;
     private static long _overlayBuiltAt;
@@ -73,7 +76,7 @@ public sealed class ProfilerSystem : ModSystem
 
     public override void Load()
     {
-        ToggleKey = KeybindLoader.RegisterKeybind(Mod, "Toggle Profiler", "F6");
+        ToggleKey = KeybindLoader.RegisterKeybind(Mod, ToggleKeyName, "F6");
 
         GoreParallel.Log = s => Mod.Logger.Warn(s);
         RainParallel.Log = s => Mod.Logger.Warn(s);
@@ -82,6 +85,7 @@ public sealed class ProfilerSystem : ModSystem
         WorldPreloader.Log = s => Mod.Logger.Info(s);
         KeybindProfileGuard.Log = s => Mod.Logger.Info(s);
         KeybindProfileGuard.Reset();
+        BossPerfMode.Log = s => Mod.Logger.Info(s);
 
         On_Main.DoUpdate += OnDoUpdate;
         On_Main.DoDraw += OnDoDraw;
@@ -129,6 +133,7 @@ public sealed class ProfilerSystem : ModSystem
         WorldPreloader.Reset();
         KeybindProfileGuard.Log = null;
         KeybindProfileGuard.Reset();
+        BossPerfMode.Log = null;
 
         Telemetry.Flush(1500);
         AsyncFileWriter.Stop();
@@ -195,8 +200,15 @@ public sealed class ProfilerSystem : ModSystem
         ApplyGcSettings(false);
         TuneThreadPool();
 
+        // v0.8.3: фидбек переключения — раньше в меню/при скрытом оверлее
+        // нажатие F6 выглядело как «не работает». Теперь всегда видно,
+        // что произошло, а подсказка в панели показывает реальную клавишу.
         if (ToggleKey != null && ToggleKey.JustPressed)
+        {
             PerfData.Visible = !PerfData.Visible;
+            if (!Main.gameMenu && !Main.dedServ)
+                Main.NewText(PerfData.Visible ? "Engine Optimizer: overlay ON" : "Engine Optimizer: overlay OFF", 150, 220, 130);
+        }
 
         WorldPreloader.Update(Settings?.PreloadBudgetMs ?? 8);
     }
@@ -730,12 +742,12 @@ public sealed class ProfilerSystem : ModSystem
 
         var pixel = TextureAssets.MagicPixel.Value;
 
-        Main.spriteBatch.Draw(pixel, new Rectangle(12, 12, 524, 268), new Color(10, 12, 16, 208));
-        Main.spriteBatch.Draw(pixel, new Rectangle(12, 12, 3, 268), _overlayFpsColor * 0.85f);
-        DrawBorder(pixel, 12, 12, 524, 268, new Color(255, 255, 255, 26));
+        Main.spriteBatch.Draw(pixel, new Rectangle(12, 12, 524, 287), new Color(10, 12, 16, 208));
+        Main.spriteBatch.Draw(pixel, new Rectangle(12, 12, 3, 287), _overlayFpsColor * 0.85f);
+        DrawBorder(pixel, 12, 12, 524, 287, new Color(255, 255, 255, 26));
 
         Utils.DrawBorderString(Main.spriteBatch, "ENGINE OPTIMIZER", new Vector2(30f, 15f), new Color(108, 116, 130), 0.56f);
-        Utils.DrawBorderString(Main.spriteBatch, "F6", new Vector2(502f, 15f), new Color(108, 116, 130), 0.56f);
+        Utils.DrawBorderString(Main.spriteBatch, _overlayKeyHint, new Vector2(502f, 15f), new Color(108, 116, 130), 0.56f);
         Utils.DrawBorderString(Main.spriteBatch, _overlayFps, new Vector2(30f, 27f), _overlayFpsColor, 1.35f);
 
         float fpsWidth = FontAssets.MouseText.Value.MeasureString(_overlayFps).X * 1.35f;
@@ -752,7 +764,7 @@ public sealed class ProfilerSystem : ModSystem
             DrawStat(282f, rowY, 518f, OverlayLabelsRight[i], OverlayValuesRight[i], OverlayColorsRight[i]);
         }
 
-        DrawGraph(pixel, 28, 232, 492, 38);
+        DrawGraph(pixel, 28, 251, 492, 38);
 
         return true;
     }
@@ -782,6 +794,7 @@ public sealed class ProfilerSystem : ModSystem
         _overlayFrame = $"frame {PerfData.FrameMs:0.00} ms";
         _overlayFrameColor = FrameColor(PerfData.FrameMs);
         _overlayGame = $"game {PerfData.GameFps}";
+        _overlayKeyHint = KeyHint();
 
         Row(0, "cpu total", $"{cpu:0.0} ms", Color.White, true);
         Row(1, "update / draw", $"{PerfData.UpdateMs:0.00} / {PerfData.DrawMs:0.00}", Color.Gainsboro, true);
@@ -792,6 +805,7 @@ public sealed class ProfilerSystem : ModSystem
         Row(4, "alloc", $"{PerfData.AllocMbPerSecond:0.0} MB/s", Color.Gainsboro, true);
         Row(5, "light / tiles", $"{PerfData.LightingMs:0.00} / {PerfData.TilesMs:0.00}", Color.Gainsboro, true);
         Row(6, "walls / bg", $"{PerfData.WallsMs:0.00} / {PerfData.BackgroundMs:0.00}", Color.Gainsboro, true);
+        Row(7, "cursor", $"{PerfData.CursorMs:0.00} ms", Color.Gainsboro, true);
 
         int spikes = Telemetry.SpikesLastMinute;
         int preloadSpikes = Telemetry.PreloadSpikesLastMinute;
@@ -811,8 +825,36 @@ public sealed class ProfilerSystem : ModSystem
             GoreParallel.Failed ? Color.OrangeRed : Color.Gainsboro, false);
         Row(5, "dust / proj / npc", $"{PerfData.DustCount} / {PerfData.ProjectileCount} / {PerfData.NpcCount}", Color.Gainsboro, false);
         Row(6, "proc / threads", $"{Telemetry.ProcessCpuPct:0}%  {Telemetry.ThreadCount} thr", Color.Gainsboro, false);
+        Row(7, "boss perf",
+            BossPerfMode.Active
+                ? (BossPerfMode.SmokeHooked ? "on (smoke+fx)" : "on (fx)")
+                : (BossPerfMode.SmokeHooked ? "ready" : "-"),
+            BossPerfMode.Active ? Color.Gold : Color.Gainsboro, false);
 
         _overlayBuiltAt = PerfData.Now;
+    }
+
+    // v0.8.3: реальная клавиша переключения из профиля управления —
+    // раньше в углу панели была жёстко зашита строка "F6" и после
+    // перепривязки врала.
+    private static string KeyHint()
+    {
+        try
+        {
+            var profile = Terraria.GameInput.PlayerInput.CurrentProfile;
+            if (profile != null &&
+                profile.InputModes.TryGetValue(Terraria.GameInput.InputMode.Keyboard, out var configuration) &&
+                configuration.KeyStatus.TryGetValue(ToggleKeyName, out var keys) &&
+                keys.Count > 0)
+            {
+                return string.Join("/", keys);
+            }
+        }
+        catch
+        {
+        }
+
+        return "F6";
     }
 
     private static void Row(int index, string label, string value, Color color, bool left)

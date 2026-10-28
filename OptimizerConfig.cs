@@ -38,5 +38,8 @@ public sealed class OptimizerConfig : ModConfig
     [DefaultValue(true)]
     public bool SmoothHardwareCursor { get; set; } = true;
 
+    [DefaultValue(true)]
+    public bool BossPerfMode { get; set; } = true;
+
     public static OptimizerConfig Instance => ModContent.GetInstance<OptimizerConfig>();
 }

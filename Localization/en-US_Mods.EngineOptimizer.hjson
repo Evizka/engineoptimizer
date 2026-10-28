@@ -21,7 +21,12 @@ Configs: {
 
 		DeferAutosaveDuringBoss: {
 			Label: Defer Autosave During Boss
-			Tooltip: ""
+			Tooltip: Autosave is postponed until after the boss fight. The timer keeps counting; failsafe is 10 minutes.
+		}
+
+		BossPerfMode: {
+			Label: Boss fight perf mode (max FPS)
+			Tooltip: During a boss fight (125-tile radius) disables the most expensive visual effects: Calamity smoke (early-exit hook), heat distortion and storm effects. Everything is restored 2 seconds after the fight. Telemetry marks those frames with the boss_perf flag.
 		}
 
 		ParallelGore: {

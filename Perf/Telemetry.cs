@@ -25,7 +25,7 @@ public static class Telemetry
         "time,frame_ms,cpu_update,cpu_draw,light,tiles_walls,bg,dust_ms,proj_ms,npc_ms,items_ms,fps_draw,gc0_s,alloc_mb_s,dust,proj,npc,items,bosses,biome,x,y,vx,vy,hp,dead,gc2_s,gc_pause_ms_s,upd_npc,upd_proj,upd_gore,upd_dust,gore_par_ms,gore_par_n,rain_par_ms,rain_par_n,preload_ms,cause,unacc_ms";
 
     private const string TimelineHeader =
-        "time,fps_draw,fps_game,ups,frame_avg,frame_p95,frame_max,cpu_update,cpu_draw,light,tiles_walls,bg,dust_ms,proj_ms,npc_ms,items_ms,gc0_s,alloc_mb_s,dust,proj,npc,items,bosses,biome,x,y,gc2_s,gc_pause_ms_s,upd_players,upd_npcs,upd_gores,upd_proj,upd_items,upd_dust,upd_time,upd_world,upd_inv,gore_par_ms,gore_par_n,rain_par_ms,rain_par_n,proc_cpu_pct,threads,section_ms,section_n,preload_pct,cursor_ms,preload_ms";
+        "time,fps_draw,fps_game,ups,frame_avg,frame_p95,frame_max,cpu_update,cpu_draw,light,tiles_walls,bg,dust_ms,proj_ms,npc_ms,items_ms,gc0_s,alloc_mb_s,dust,proj,npc,items,bosses,biome,x,y,gc2_s,gc_pause_ms_s,upd_players,upd_npcs,upd_gores,upd_proj,upd_items,upd_dust,upd_time,upd_world,upd_inv,gore_par_ms,gore_par_n,rain_par_ms,rain_par_n,proc_cpu_pct,threads,section_ms,section_n,preload_pct,cursor_ms,preload_ms,boss_perf";
 
     private static readonly double[] Window = new double[WindowSize];
     private static readonly double[] WindowCopy = new double[WindowSize];
@@ -415,6 +415,8 @@ public static class Telemetry
         Num(sb, "cpu_draw_ms", PerfData.DrawMs);
         Num(sb, "cursor_ms", PerfData.CursorMs);
         Str(sb, "cursor_state", SmoothCursorSystem.Status);
+        Bool(sb, "boss_perf", BossPerfMode.Active);
+        Bool(sb, "boss_perf_smoke_hook", BossPerfMode.SmokeHooked);
         Num(sb, "unacc_ms", PerfData.UnaccountedMs);
         Num(sb, "light_ms", PerfData.LightingMs);
         Num(sb, "tiles_walls_ms", PerfData.TilesMs + PerfData.WallsMs);
@@ -587,7 +589,8 @@ public static class Telemetry
         sb.Append(PerfData.SectionCount.ToString(Inv)).Append(',');
         sb.Append(F(WorldPreloader.Percent)).Append(',');
         sb.Append(F(PerfData.CursorMs)).Append(',');
-        sb.Append(F(WorldPreloader.LastUpdateMs));
+        sb.Append(F(WorldPreloader.LastUpdateMs)).Append(',');
+        sb.Append(BossPerfMode.Active ? 1 : 0);
 
         AsyncFileWriter.Append(path, sb.ToString() + Environment.NewLine, TimelineHeader + Environment.NewLine);
     }

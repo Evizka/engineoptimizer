@@ -136,6 +136,10 @@ public static class PerfData
 
     public static long Now => Stopwatch.GetTimestamp();
 
+    // v0.8.3: заранее считаем коэффициент — MsSince дёргается десятки раз
+    // за кадр из каждого хука, деление заменили умножением.
+    private static readonly double TicksToMs = 1000.0 / Stopwatch.Frequency;
+
     private static void PauseSampleReset()
     {
         _pauseSampleTs = 0;
@@ -144,10 +148,10 @@ public static class PerfData
 
     // ms, прошедшие с метки времени ts (Stopwatch-тики).
     public static double MsSince(long ts) =>
-        (Now - ts) * 1000.0 / Stopwatch.Frequency;
+        (Stopwatch.GetTimestamp() - ts) * TicksToMs;
 
     private static double MsFromTicks(long ticks) =>
-        ticks * 1000.0 / Stopwatch.Frequency;
+        ticks * TicksToMs;
 
     private static double Ema(double current, double sample, double weight) =>
         current + (sample - current) * weight;
