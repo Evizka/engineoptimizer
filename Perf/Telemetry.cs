@@ -677,7 +677,9 @@ public static class Telemetry
         if (PerfData.SaveThisFrameMs >= 1.0 && PerfData.SaveThisFrameMs >= update * 0.5)
             return "save";
 
-        if (PerfData.SectionMs >= 1.0 && PerfData.SectionMs >= update * 0.5)
+        // v0.8.8: значение этого кадра (раньше — EMA SectionMs: причина
+        // «section» ложно прилипала ещё ~8 кадров после пересчёта).
+        if (PerfData.SectionMsThisFrame >= 1.0 && PerfData.SectionMsThisFrame >= update * 0.5)
             return "section";
 
         if (PerfData.GcPauseThisFrameMs >= frameMs * 0.35)

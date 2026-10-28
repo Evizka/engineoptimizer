@@ -104,6 +104,7 @@ public static class PerfData
     public static double SaveMs;
     public static int SaveCount;
     public static double GcPauseThisFrameMs;
+    public static double SectionMsThisFrame;
     public static double UnaccountedMs;
     public static double PreloadMsThisFrame;
     public static double SectionMs;
@@ -256,6 +257,10 @@ public static class PerfData
 
         PreloadMsThisFrame = WorldPreloader.LastUpdateMs;
         SaveThisFrameMs = _saveMsThisFrame;
+        // v0.8.8: this-frame значение секций — для классификации спайков.
+        // EMA (SectionMs) подтягивала причину «section» ещё ~8 кадров
+        // после того, как пересчёт секций закончился.
+        SectionMsThisFrame = _sectionMs;
 
         TimeSpan pauseTotal = GC.GetTotalPauseDuration();
         if (_pauseSampleTs != 0)
@@ -392,6 +397,7 @@ public static class PerfData
         _saveMsThisFrame = 0;
         SaveThisFrameMs = 0;
         GcPauseThisFrameMs = 0;
+        SectionMsThisFrame = 0;
     }
 
     // Полный сброс при входе в мир.
@@ -474,6 +480,7 @@ public static class PerfData
         SaveThisFrameMs = 0;
         _saveMsThisFrame = 0;
         GcPauseThisFrameMs = 0;
+        SectionMsThisFrame = 0;
         PauseSampleReset();
 
         PreloadMsThisFrame = 0;
