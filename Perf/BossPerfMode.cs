@@ -1,5 +1,6 @@
 using System;
 using System.Reflection;
+using System.Text;
 using Mono.Cecil.Cil;
 using MonoMod.Cil;
 using Terraria;
@@ -8,6 +9,12 @@ using Terraria.ModLoader;
 namespace EngineOptimizer.Perf;
 
 // v0.8.3 — режим максимального FPS в боях с боссами.
+// v0.8.5 — то же самое для роста тайлов мира: на время боя
+// приостанавливаются UpdateWorld_OvergroundTile/UndergroundTile и
+// HandleTileGrowth (трава/лианы/кактусы). По CPU-профилю это ~0.8 мс
+// кадра; замедление роста на минуту боя визуально незаметно.
+// В мультиплеере мир обновляет сервер — у клиента эти хуки просто
+// никогда не срабатывают.
 //
 // По свежим CPU-профилям главного потока главный пожиратель кадра в бою —
 // дым из мода CalamityFables: CalamityFables.Particles.
@@ -15,17 +22,10 @@ namespace EngineOptimizer.Perf;
 // Вторичные цели: heat distortion и storm effects (ванильные тяжёлые
 // шейдерные проходы, в бою почти не заметные).
 //
-// Что делает:
-//  - на входе в мир ищет сборку CalamityFables и ставит IL-хук на
-//    DrawSmoke: пока идёт бой, метод выходит на первом же ret — тело
-//    (полный проход отрисовки дыма) не выполняется вовсе;
-//  - в бое удерживает Main.UseHeatDistortion = false и
-//    Main.UseStormEffects = false, после боя возвращает сохранённые
-//    значения;
-//  - телеметрия (live.json / timeline.csv) получает флаг boss_perf.
-//
-// Всё консервативно: хук ставится только если метод найден и возвращает
-// void; любая ошибка отключает часть фичи, но не мод. Опция в конфиге.
+// Механизм единый: на каждую цель ставится IL-хук с ранним выходом —
+// пока идёт бой, тело метода не выполняется. Всё консервативно: хук
+// ставится только на найденный метод с поддерживаемым типом возврата;
+// любая ошибка отключает часть фичи, но не мод. Опция в конфиге.
 public sealed class BossPerfMode : ModSystem
 {
     public const string SmokeTypeName = "CalamityFables.Particles.MergeBlendSmokeRenderTarget";
@@ -41,9 +41,23 @@ public sealed class BossPerfMode : ModSystem
     public static bool Active { get; private set; }
 
     // true — IL-хук на дым установлен (мод CalamityFables найден).
-    public static bool SmokeHooked => _installed;
+    public static bool SmokeHooked => _smokeInstalled;
 
-    private static bool _installed;
+    // Сколько хуков раннего выхода стоит на рост тайлов мира.
+    public static int TileHooksInstalled => _tileHooks;
+
+    public static bool AnyHook => _smokeInstalled || _tileHooks > 0;
+
+    private static readonly (string Type, string Method)[] TileTargets =
+    {
+        ("Terraria.WorldGen", "UpdateWorld_OvergroundTile"),
+        ("Terraria.WorldGen", "UpdateWorld_UndergroundTile"),
+        ("Terraria.WorldGen", "HandleTileGrowth"),
+    };
+
+    private static bool _smokeInstalled;
+    private static int _tileHooks;
+    private static bool _tileAttempted;
     private static bool _unavailable;
     private static long _lastInstallTry;
     private static long _lastBossSeen;
@@ -83,7 +97,8 @@ public sealed class BossPerfMode : ModSystem
 
         // Повторные попытки поставить хук — на случай поздней загрузки
         // сборки-цели. Редко и дёшево: один рефлексивный поиск в 10 с.
-        if (!_installed && !_unavailable && PerfData.MsSince(_lastInstallTry) >= 10000.0)
+        bool needInstall = (!_smokeInstalled && !_unavailable) || !_tileAttempted;
+        if (needInstall && PerfData.MsSince(_lastInstallTry) >= 10000.0)
             TryInstall();
 
         var config = OptimizerConfig.Instance;
@@ -121,6 +136,18 @@ public sealed class BossPerfMode : ModSystem
         }
     }
 
+    // Короткая сводка для оверлея: smoke+fx+world.
+    public static string HookSummary()
+    {
+        var sb = new StringBuilder(16);
+        if (_smokeInstalled)
+            sb.Append("smoke+");
+        sb.Append("fx");
+        if (_tileHooks > 0)
+            sb.Append("+world");
+        return sb.ToString();
+    }
+
     // Босс в радиусе 8000 px — общий проход с отложенным автосейвом
     // (ProfilerSystem.BossActive), чтобы не сканировать npc-таблицу дважды.
     private static bool ScanBoss() => ProfilerSystem.BossActive();
@@ -136,61 +163,140 @@ public sealed class BossPerfMode : ModSystem
         _changed = false;
     }
 
-    // Вызывается из пропатченного DrawSmoke (главный поток, каждый кадр
-    // отрисовки дыма). false — выполнить оригинальное тело.
-    private static bool ShouldSkipSmoke() => Active;
+    // Вызывается из пропатченных методов (главный поток, каждый кадр).
+    // false — выполнить оригинальное тело.
+    private static bool ShouldSkip() => Active;
 
     private static void TryInstall()
     {
-        if (_installed || _unavailable)
+        bool wantSmoke = !_smokeInstalled && !_unavailable;
+        bool wantTiles = !_tileAttempted;
+        if (!wantSmoke && !wantTiles)
             return;
 
         _lastInstallTry = PerfData.Now;
 
-        try
+        if (wantSmoke)
         {
-            var target = FindSmokeMethod();
-            if (target == null)
-                return; // мод-цель не загружен — попробуем ещё раз позже
+            try
+            {
+                var target = FindMethod(SmokeTypeName, SmokeMethodName);
+                if (target == null)
+                    return; // мод-цель не загружен — попробуем ещё раз позже
 
-            if (target.ReturnType != typeof(void))
+                if (!IsSupportedReturnType(target.ReturnType))
+                {
+                    _unavailable = true;
+                    Log?.Invoke($"Boss perf: {SmokeTypeName}.{SmokeMethodName} has an unsupported return type, smoke skip disabled.");
+                    return;
+                }
+
+                MonoModHooks.Modify(target, il => EmitEarlyExit(il, target.ReturnType));
+                _smokeInstalled = true;
+                // tML сам снимет хук при выгрузке мода (MonoModHooks привязан
+                // к нашему ModSystem) — Dispose здесь не нужен.
+
+                Log?.Invoke($"Boss perf: early-exit hook installed on {SmokeTypeName}.{SmokeMethodName}.");
+            }
+            catch (Exception e)
             {
                 _unavailable = true;
-                Log?.Invoke($"Boss perf: {SmokeTypeName}.{SmokeMethodName} is not void, smoke skip disabled.");
-                return;
+                Log?.Invoke("Boss perf: could not hook the smoke renderer: " + e.GetType().Name + ": " + e.Message);
+            }
+        }
+
+        if (wantTiles)
+        {
+            _tileAttempted = true;
+
+            foreach (var (typeName, methodName) in TileTargets)
+            {
+                try
+                {
+                    var target = FindMethod(typeName, methodName);
+                    if (target == null)
+                    {
+                        Log?.Invoke($"Boss perf: {typeName}.{methodName} not found on this tML build, skipped.");
+                        continue;
+                    }
+
+                    if (!IsSupportedReturnType(target.ReturnType))
+                    {
+                        Log?.Invoke($"Boss perf: {typeName}.{methodName} has an unsupported return type, skipped.");
+                        continue;
+                    }
+
+                    MonoModHooks.Modify(target, il => EmitEarlyExit(il, target.ReturnType));
+                    _tileHooks++;
+                }
+                catch (Exception e)
+                {
+                    Log?.Invoke($"Boss perf: could not hook {typeName}.{methodName}: " + e.GetType().Name + ": " + e.Message);
+                }
             }
 
-            MonoModHooks.Modify(target, il =>
-            {
-                // ret на входе: пока идёт бой, тело метода не выполняется.
-                var c = new ILCursor(il);
-                var run = c.DefineLabel();
-                c.EmitDelegate<Func<bool>>(ShouldSkipSmoke);
-                c.Emit(OpCodes.Brfalse_S, run);
-                c.Emit(OpCodes.Ret);
-                c.MarkLabel(run);
-            });
-            _installed = true;
-            // tML сам снимет хук при выгрузке мода (MonoModHooks привязан
-            // к нашему ModSystem) — Dispose здесь не нужен.
-
-            Log?.Invoke($"Boss perf: early-exit hook installed on {SmokeTypeName}.{SmokeMethodName}.");
-        }
-        catch (Exception e)
-        {
-            _unavailable = true;
-            Log?.Invoke("Boss perf: could not hook the smoke renderer: " + e.GetType().Name + ": " + e.Message);
+            if (_tileHooks > 0)
+                Log?.Invoke($"Boss perf: world tile growth is paused during boss fights ({_tileHooks} hook(s)).");
         }
     }
 
-    private static MethodInfo FindSmokeMethod()
+    private static bool IsSupportedReturnType(Type t) =>
+        t == typeof(void)
+        || t == typeof(bool)
+        || t == typeof(byte) || t == typeof(sbyte)
+        || t == typeof(short) || t == typeof(ushort)
+        || t == typeof(int) || t == typeof(uint)
+        || t == typeof(long) || t == typeof(ulong)
+        || t == typeof(float) || t == typeof(double)
+        || !t.IsValueType;
+
+    // В начало метода добавляется: if (ShouldSkip()) return <default>;
+    private static void EmitEarlyExit(ILContext il, Type returnType)
+    {
+        var c = new ILCursor(il);
+        var run = c.DefineLabel();
+        c.EmitDelegate<Func<bool>>(ShouldSkip);
+        c.Emit(OpCodes.Brfalse_S, run);
+        if (returnType == typeof(void))
+        {
+            // значения не нужно
+        }
+        else if (returnType == typeof(float))
+        {
+            c.Emit(OpCodes.Ldc_R4, 0f);
+        }
+        else if (returnType == typeof(double))
+        {
+            c.Emit(OpCodes.Ldc_R8, 0.0);
+        }
+        else if (returnType == typeof(long) || returnType == typeof(ulong))
+        {
+            c.Emit(OpCodes.Ldc_I4_0);
+            c.Emit(OpCodes.Conv_I8);
+        }
+        else if (returnType == typeof(int) || returnType == typeof(uint)
+            || returnType == typeof(short) || returnType == typeof(ushort)
+            || returnType == typeof(byte) || returnType == typeof(sbyte)
+            || returnType == typeof(bool))
+        {
+            c.Emit(OpCodes.Ldc_I4_0);
+        }
+        else
+        {
+            c.Emit(OpCodes.Ldnull);
+        }
+        c.Emit(OpCodes.Ret);
+        c.MarkLabel(run);
+    }
+
+    private static MethodInfo FindMethod(string typeFullName, string methodName)
     {
         foreach (var asm in AppDomain.CurrentDomain.GetAssemblies())
         {
             Type type = null;
             try
             {
-                type = asm.GetType(SmokeTypeName, false);
+                type = asm.GetType(typeFullName, false);
             }
             catch
             {
@@ -201,15 +307,13 @@ public sealed class BossPerfMode : ModSystem
 
             foreach (var m in type.GetMethods(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static | BindingFlags.Instance | BindingFlags.DeclaredOnly))
             {
-                if (m.Name != SmokeMethodName || m.ReturnType != typeof(void))
-                    continue;
-                if (m.IsGenericMethodDefinition)
+                if (m.Name != methodName || m.IsGenericMethodDefinition)
                     continue;
 
                 return m;
             }
 
-            // Тип найден, но подходящего метода нет — дальше не ищем.
+            // Тип найден, но метода нет — дальше не ищем.
             return null;
         }
 
@@ -218,7 +322,9 @@ public sealed class BossPerfMode : ModSystem
 
     private static void Reset()
     {
-        _installed = false;
+        _smokeInstalled = false;
+        _tileHooks = 0;
+        _tileAttempted = false;
         _unavailable = false;
         _lastInstallTry = 0;
         _lastBossSeen = 0;

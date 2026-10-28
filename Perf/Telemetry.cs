@@ -49,6 +49,7 @@ public static class Telemetry
 
     public static double ProcessCpuPct;
     public static int ThreadCount;
+    public static string ProcessPriority = "";
 
     private static readonly CultureInfo Inv = CultureInfo.InvariantCulture;
     private static readonly Encoding Utf8 = new UTF8Encoding(false);
@@ -360,6 +361,15 @@ public static class Telemetry
             if (_proc == null)
                 _proc = Process.GetCurrentProcess();
 
+            // v0.8.5: приоритет процесса (см. ProfilerSystem.ApplyProcessPriority)
+            try
+            {
+                ProcessPriority = _proc.PriorityClass.ToString();
+            }
+            catch
+            {
+            }
+
             var cpu = _proc.TotalProcessorTime;
             long now = PerfData.Now;
 
@@ -420,6 +430,7 @@ public static class Telemetry
         Str(sb, "cursor_state", SmoothCursorSystem.Status);
         Bool(sb, "boss_perf", BossPerfMode.Active);
         Bool(sb, "boss_perf_smoke_hook", BossPerfMode.SmokeHooked);
+        Bool(sb, "boss_perf_tile_hooks", BossPerfMode.TileHooksInstalled > 0);
         Num(sb, "unacc_ms", PerfData.UnaccountedMs);
         Num(sb, "light_ms", PerfData.LightingMs);
         Num(sb, "tiles_walls_ms", PerfData.TilesMs + PerfData.WallsMs);
@@ -450,6 +461,7 @@ public static class Telemetry
         Num(sb, "alloc_mb_per_s", PerfData.AllocMbPerSecond);
         Num(sb, "process_cpu_pct", ProcessCpuPct);
         Num(sb, "threads", ThreadCount);
+        Str(sb, "proc_priority", ProcessPriority);
         Num(sb, "section_ms", PerfData.SectionMs);
         Num(sb, "section_n", PerfData.SectionCount);
         Num(sb, "preload_pct", WorldPreloader.Percent);

@@ -41,5 +41,8 @@ public sealed class OptimizerConfig : ModConfig
     [DefaultValue(true)]
     public bool BossPerfMode { get; set; } = true;
 
+    [DefaultValue(true)]
+    public bool BoostProcessPriority { get; set; } = true;
+
     public static OptimizerConfig Instance => ModContent.GetInstance<OptimizerConfig>();
 }

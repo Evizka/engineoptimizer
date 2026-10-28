@@ -19,6 +19,11 @@ Configs: {
 			Tooltip: ""
 		}
 
+		BoostProcessPriority: {
+			Label: Boost Process Priority
+			Tooltip: While in a world the process priority is raised to AboveNormal: the browser, Discord and other background apps steal CPU from the game less often. The mod cannot change the turbo boost clock (that is OS/BIOS territory), but removing contention it can. Restored to Normal after leaving the world.
+		}
+
 		DeferAutosaveDuringBoss: {
 			Label: Defer Autosave During Boss
 			Tooltip: Autosave is postponed until after the boss fight. The timer keeps counting; failsafe is 10 minutes.

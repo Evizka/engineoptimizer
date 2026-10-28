@@ -26,7 +26,7 @@ if (-not (Test-Path -LiteralPath $live)) {
 
 $stamp = Get-Date -Format 'yyyyMMdd-HHmmss'
 $out = Join-Path $OutDir "boss-trace-$stamp.csv"
-$header = 'time,boss_perf,fps_draw,frame_ms,frame_p95_ms,cpu_update_ms,cpu_draw_ms,dust_ms,projectiles_ms,npc_ms,cursor_ms,gc_pause_ms_per_s,alloc_mb_per_s,smoke_hook,projectiles,proj_top'
+$header = 'time,boss_perf,fps_draw,frame_ms,frame_p95_ms,cpu_update_ms,cpu_draw_ms,dust_ms,projectiles_ms,npc_ms,cursor_ms,gc_pause_ms_per_s,alloc_mb_per_s,smoke_hook,tile_hooks,proc_priority,projectiles,proj_top'
 # ВАЖНО: -FilePath, не -PositionalPath/Path-алиас: у Out-File позиционный
 # аргумент работает, но с явным -FilePath скрипт не ломается в старых
 # режимах PS (известный фикс v0.8.2-скрипта).
@@ -68,11 +68,13 @@ while ($watch.Elapsed.TotalSeconds -lt $Seconds) {
     }
     $lastBoss = $boss
 
-    $row = '{0},{1},{2},{3},{4},{5},{6},{7},{8},{9},{10},{11},{12},{13},{14},{15}' -f `
+    $row = '{0},{1},{2},{3},{4},{5},{6},{7},{8},{9},{10},{11},{12},{13},{14},{15},{16},{17}' -f `
         $j.ts, $boss, $j.fps_draw, $j.frame_ms, $j.frame_p95_ms,
         $j.cpu_update_ms, $j.cpu_draw_ms, $j.dust_ms, $j.projectiles_ms, $j.npc_ms,
         $j.cursor_ms, $j.gc_pause_ms_per_s, $j.alloc_mb_per_s,
         ($(if ($j.boss_perf_smoke_hook) { 1 } else { 0 })),
+        ($(if ($j.boss_perf_tile_hooks) { 1 } else { 0 })),
+        ($j.proc_priority),
         ($j.projectiles), ('"{0}"' -f ($j.projectile_top -replace '"', '""'))
     Add-Content -LiteralPath $out -Value $row -Encoding utf8
 }

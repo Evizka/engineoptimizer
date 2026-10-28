@@ -139,6 +139,7 @@ public sealed class ProfilerSystem : ModSystem
         Telemetry.Flush(1500);
         AsyncFileWriter.Stop();
 
+        RestoreProcessPriority();
         RestoreGc();
 
         Settings = null;
@@ -153,6 +154,7 @@ public sealed class ProfilerSystem : ModSystem
         ApplyConfig();
         ApplyGcSettings(true);
         TuneThreadPool();
+        ApplyProcessPriority();
 
         GoreParallel.Reset();
         RainParallel.Reset();
@@ -192,6 +194,7 @@ public sealed class ProfilerSystem : ModSystem
             PerfLog.Reset();
         }
 
+        RestoreProcessPriority();
         RestoreGc();
     }
 
@@ -389,6 +392,54 @@ public sealed class ProfilerSystem : ModSystem
         catch
         {
         }
+    }
+
+    // v0.8.5: реальный рычаг «выжать CPU» из мода — приоритет процесса.
+    // Частота турбобуста управляется ОС/BIOS, мод до неё не дотянется,
+    // но AboveNormal убирает вытеснение игры фоном (браузер, Discord,
+    // индексация): планировщик отдаёт ядра игре, даже когда те шумят.
+    // Поднимаем только с Normal (кастомные приоритеты не трогаем) и
+    // только в мире; после выхода — исходный.
+    private bool _priorityBoosted;
+    private ProcessPriorityClass _previousPriority;
+
+    private void ApplyProcessPriority()
+    {
+        if (_priorityBoosted || Settings == null || !Settings.BoostProcessPriority || Main.dedServ)
+            return;
+
+        try
+        {
+            var current = Process.GetCurrentProcess();
+            _previousPriority = current.PriorityClass;
+            if (_previousPriority != ProcessPriorityClass.Normal)
+                return;
+
+            current.PriorityClass = ProcessPriorityClass.AboveNormal;
+            _priorityBoosted = true;
+            Mod.Logger.Info("Process priority Normal -> AboveNormal (in world).");
+        }
+        catch (Exception e)
+        {
+            Mod.Logger.Warn("Could not boost the process priority: " + e.GetType().Name + ": " + e.Message);
+        }
+    }
+
+    private void RestoreProcessPriority()
+    {
+        if (!_priorityBoosted)
+            return;
+
+        try
+        {
+            Process.GetCurrentProcess().PriorityClass = _previousPriority;
+            Mod.Logger.Info("Process priority restored to " + _previousPriority + ".");
+        }
+        catch
+        {
+        }
+
+        _priorityBoosted = false;
     }
 
     // ---- хуки движка ----
@@ -832,9 +883,7 @@ public sealed class ProfilerSystem : ModSystem
             PerfData.ProjectileCount > 150 ? Color.Gold : Color.Gainsboro, false);
         Row(6, "proc / threads", $"{Telemetry.ProcessCpuPct:0}%  {Telemetry.ThreadCount} thr", Color.Gainsboro, false);
         Row(7, "boss perf",
-            BossPerfMode.Active
-                ? (BossPerfMode.SmokeHooked ? "on (smoke+fx)" : "on (fx)")
-                : (BossPerfMode.SmokeHooked ? "ready" : "-"),
+            BossPerfMode.Active ? "on (" + BossPerfMode.HookSummary() + ")" : (BossPerfMode.AnyHook ? "ready" : "-"),
             BossPerfMode.Active ? Color.Gold : Color.Gainsboro, false);
 
         _overlayBuiltAt = PerfData.Now;
