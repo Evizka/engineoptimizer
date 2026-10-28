@@ -1,0 +1,75 @@
+name: build
+
+# Сборка мода на настоящем tModLoader. Результат (EngineOptimizer.tmod)
+# пушится в ветку ci-build (одиночный коммит, force) + аттачится артефактом.
+on:
+  push:
+    branches-ignore: [ci-build]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET 8
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Download tModLoader (2026.08.3.0 stable)
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fL -o tModLoader.zip "https://github.com/tModLoader/tModLoader/releases/download/v2026.08.3.0/tModLoader.zip"
+          mkdir -p tML
+          unzip -q tModLoader.zip -d tML
+          echo "--- содержимое tML ---"
+          ls -la tML | head -40
+          test -f tML/tModLoader.dll || { echo "tModLoader.dll не найден"; exit 1; }
+          test -f tML/tMLMod.targets || { echo "tMLMod.targets не найден"; ls tML; exit 1; }
+
+      - name: Build mod
+        shell: bash
+        run: |
+          set -euo pipefail
+          dotnet --info | head -5
+          dotnet build -c Release -p:TerrariaSteamPath="$GITHUB_WORKSPACE/tML/"
+
+      - name: Collect output
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          # свежий .tmod лежит в tML/Mods/
+          find "$GITHUB_WORKSPACE/tML" -name '*.tmod' -exec cp {} dist/ \; || true
+          echo "--- найденные tmod ---"
+          find "$GITHUB_WORKSPACE" -name '*.tmod' -not -path '*/dist/*' || true
+          echo "--- dist ---"
+          ls -la dist
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: EngineOptimizer-tmod
+          path: dist/*
+          if-no-files-found: warn
+
+      - name: Push .tmod to ci-build branch
+        if: ${{ hashFiles('dist/*.tmod') != '' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout --orphan ci-build
+          git rm -rf --quiet . || true
+          cp dist/*.tmod .
+          git add -f *.tmod
+          git commit -m "EngineOptimizer build of ${GITHUB_SHA::12}"
+          git push --force origin ci-build
