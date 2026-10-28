@@ -1,7 +1,11 @@
 name: build
 
 # Сборка мода на настоящем tModLoader. Результат (EngineOptimizer.tmod)
-# пушится в ветку ci-build (одиночный коммит, force) + аттачится артефактом.
+# пушится в ветку ci-build (orphan, force) + аттачится артефактом.
+#
+# ВАЖНО: tML-билдер пакует в .tmod всё содержимое папки csproj, поэтому
+# tModLoader и вспомогательные файлы живут в /tmp, а исходники копируются
+# в чистую /tmp/src (иначе .tmod раздувается до 100+ МБ и не пушится).
 on:
   push:
     branches-ignore: [ci-build]
@@ -26,52 +30,54 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          curl -fL -o tModLoader.zip "https://github.com/tModLoader/tModLoader/releases/download/v2026.08.3.0/tModLoader.zip"
-          mkdir -p tML
-          unzip -q tModLoader.zip -d tML
-          echo "--- содержимое tML ---"
-          ls -la tML | head -40
-          test -f tML/tModLoader.dll || { echo "tModLoader.dll не найден"; exit 1; }
-          test -f tML/tMLMod.targets || { echo "tMLMod.targets не найден"; ls tML; exit 1; }
+          curl -fL -o /tmp/tModLoader.zip "https://github.com/tModLoader/tModLoader/releases/download/v2026.08.3.0/tModLoader.zip"
+          mkdir -p /tmp/tML
+          unzip -q /tmp/tModLoader.zip -d /tmp/tML
+          test -f /tmp/tML/tModLoader.dll
+          test -f /tmp/tML/tMLMod.targets
+          echo "tModLoader готов: $(ls /tmp/tML | wc -l) файлов"
+
+      - name: Prepare clean source dir
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/src
+          rsync -a \
+            --exclude '.git/' --exclude '.github/' --exclude 'tools/' \
+            --exclude '*.tmod' --exclude 'enabled.json' --exclude 'BTitles_shown.dat' \
+            --exclude 'build.ps1' --exclude 'dist/' \
+            "$GITHUB_WORKSPACE/" /tmp/src/
+          echo "--- /tmp/src ---"
+          ls -la /tmp/src
+          du -sh /tmp/src
 
       - name: Build mod
         shell: bash
         run: |
           set -euo pipefail
           dotnet --info | head -5
-          dotnet build -c Release -p:TerrariaSteamPath="$GITHUB_WORKSPACE/tML/"
+          dotnet build /tmp/src/EngineOptimizer.csproj -c Release -p:TerrariaSteamPath=/tmp/tML/
 
       - name: Collect output
         shell: bash
         run: |
           set -euo pipefail
-          echo "=== ищем .tmod по всей системе ==="
-          find / -name '*.tmod' -not -path '/proc/*' -not -path '/sys/*' 2>/dev/null | head -20 || true
-          echo "=== HOME/.local/share ==="
-          ls -laR "$HOME/.local/share/Terraria" 2>/dev/null | head -60 || true
-          echo "=== HOME/Documents ==="
-          find "$HOME/Documents" -maxdepth 4 2>/dev/null | head -40 || true
-          echo "=== workspace .tmod ==="
-          find "$GITHUB_WORKSPACE" -name '*.tmod' || true
-          echo "=== логи tML ==="
-          find / -path /proc -prune -o -iname '*.log' -path '*Terraria*' -print 2>/dev/null | head -10 || true
-          find / -path /proc -prune -o -iname '*.log' -path '*tModLoader*' -print 2>/dev/null | head -10 || true
-
+          echo "=== ищем .tmod ==="
+          find "$HOME" /tmp/src -name '*.tmod' 2>/dev/null || true
           mkdir -p dist
-          # старый .tmod из checkout лежит в корне workspace — исключаем его
-          find / -name '*.tmod' -not -path '/proc/*' -not -path '/sys/*' \
-               -not -path "$GITHUB_WORKSPACE/EngineOptimizer.tmod" \
-               -not -path '*/obj/*' -not -path '*/bin/*' 2>/dev/null \
-               -exec cp {} dist/ \; || true
-          echo "--- dist ---"
+          find "$HOME" /tmp/src -name '*.tmod' -exec cp {} dist/ \; || true
           ls -la dist
+          if [ -z "$(ls dist/*.tmod 2>/dev/null)" ]; then
+            echo "::error::.tmod не найден после сборки — смотреть лог Build mod"
+            exit 1
+          fi
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: EngineOptimizer-tmod
           path: dist/*
-          if-no-files-found: warn
+          if-no-files-found: error
 
       - name: Push .tmod to ci-build branch
         if: ${{ hashFiles('dist/*.tmod') != '' }}
