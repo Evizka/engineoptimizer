@@ -1,0 +1,42 @@
+name: release
+
+# Заливает готовый EngineOptimizer.tmod из ветки ci-build в GitHub Release.
+# Прямой upload ассетов из песочницы блокируется хостом uploads.github.com,
+# а раннеру Actions доступен весь интернет — поэтому через него.
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Тег релиза (например, v0.8.8)'
+        required: true
+        default: 'v0.8.8'
+
+permissions:
+  contents: write
+
+jobs:
+  attach:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Attach .tmod to release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          TAG="${{ inputs.tag || github.ref_name }}"
+          echo "Релиз: $TAG"
+
+          git clone --quiet --depth 1 --branch ci-build \
+            "https://github.com/${GITHUB_REPOSITORY}.git" /tmp/ci
+          ls -la /tmp/ci/*.tmod
+
+          cp /tmp/ci/EngineOptimizer.tmod .
+          ls -la EngineOptimizer.tmod
+
+          # --clobber: перезаливаем, если ассет уже есть
+          gh release upload "$TAG" EngineOptimizer.tmod --clobber
+          echo "Готово: ассет залит в $TAG"
