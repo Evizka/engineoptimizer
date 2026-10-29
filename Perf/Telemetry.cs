@@ -61,6 +61,8 @@ public static class Telemetry
     private static int _calmN;
     private static double _calmFpsSum, _calmFrameSum;
     private static double _gc0Sum, _gc2Sum, _gcPauseSum, _allocSum;
+    private static double _lightSum, _unaccSum; // v0.8.10: средние light/unacc
+    private static string _cursorStatus = "";   // v0.8.10: статус курсора в мире
 
     private static string _dir;
     private static Process _proc;
@@ -140,6 +142,8 @@ public static class Telemetry
         _calmN = 0;
         _calmFpsSum = _calmFrameSum = 0.0;
         _gc0Sum = _gc2Sum = _gcPauseSum = _allocSum = 0.0;
+        _lightSum = _unaccSum = 0.0;
+        _cursorStatus = "";
         _sessionStartDt = DateTime.Now;
         _lastWriteTs = 0;
         _lastTimelineTs = 0;
@@ -237,6 +241,10 @@ public static class Telemetry
             sb.AppendLine("started: " + _sessionStartDt.ToString("yyyy-MM-dd HH:mm:ss", Inv));
             sb.AppendLine("duration_min: " + minutes.ToString("0.0", Inv));
             sb.AppendLine("world: " + Main.worldName);
+            sb.AppendLine("net_mode: " + (Main.netMode == 0 ? "single" : Main.netMode == 1 ? "client" : "server"));
+            // v0.8.10: каким был курсор в мире (hw = аппаратный, vanilla =
+            // ванильный, failed = сбой, off = выключен клавишей/конфигом).
+            sb.AppendLine("cursor_state: " + _cursorStatus);
             sb.AppendLine();
 
             sb.AppendLine("--- Кадр в среднем ---");
@@ -299,6 +307,8 @@ public static class Telemetry
                     + (string.IsNullOrEmpty(s.NpcTop) ? "" : "  npc_top=" + s.NpcTop));
             }
 
+            AppendRecommendations(sb);
+
             // Перезапись (Atomic), а не Append: иначе сводки сессий
             // накопились бы в одном файле.
             AsyncFileWriter.WriteAtomic(Path.Combine(Dir, "last-session.txt"), sb.ToString());
@@ -306,6 +316,63 @@ public static class Telemetry
         catch
         {
         }
+    }
+
+    // v0.8.10: короткие советы по итогам сессии — только по измеренным
+    // цифрам (средние 1 Гц-сэмплов), без гаданий. Названия настроек игры
+    // соответствуют меню «Видео/Графика».
+    private static void AppendRecommendations(StringBuilder sb)
+    {
+        if (_statFpsN < 10)
+            return;
+
+        double n = _statFpsN;
+        double fpsAvg = _statFpsSum / n;
+        double lightAvg = _lightSum / n;
+        double unaccAvg = _unaccSum / n;
+        double updAvg = _statUpdSum / n;
+        double drawAvg = _statDrawSum / n;
+        double allocAvg = _allocSum / n;
+        double gcPauseAvg = _gcPauseSum / n;
+
+        var tips = new List<string>();
+
+        try
+        {
+            bool vsync = Main.graphics != null && Main.graphics.SynchronizeWithVerticalRetrace;
+            if (vsync && (Math.Abs(fpsAvg - 60.0) < 3.0 || Math.Abs(fpsAvg - 120.0) < 5.0 || Math.Abs(fpsAvg - 144.0) < 6.0))
+                tips.Add("vsync включен, а средний FPS упирается ровно в частоту монитора ("
+                    + fpsAvg.ToString("0", Inv) + ") — для большего FPS выключите vsync в настройках видео");
+            else if (vsync && fpsAvg < 55.0)
+                tips.Add("vsync включен: при просадках он добавляет рывки — попробуйте выключить в настройках видео");
+        }
+        catch
+        {
+        }
+
+        if (lightAvg > 2.0)
+            tips.Add("освещение стоит ~" + lightAvg.ToString("0.0", Inv) + " мс/кадр — переключите режим освещения "
+                + "(Color/Retro/White/Trippy) в настройках видео и сравните FPS; в настройках tModLoader включите multi-core lighting");
+
+        if (unaccAvg > 6.0 && updAvg + drawAvg < 12.0)
+            tips.Add("update+draw низкие, но кадр всё равно долог (~" + unaccAvg.ToString("0.0", Inv)
+                + " мс вне их) — игра ждёт GPU: снизьте разрешение/качество, отключите фоновые обои и освещение окружения");
+
+        if (allocAvg > 400.0 || gcPauseAvg > 40.0)
+            tips.Add("много аллокаций (" + allocAvg.ToString("0", Inv) + " MB/s) и GC-пауз (" + gcPauseAvg.ToString("0", Inv)
+                + " мс/с) — обычно это тяжёлый мод; помогает большой стек потока: tools/setup-highperf.ps1 -PatchStackSize");
+
+        if (fpsAvg < 40.0)
+            tips.Add("средний FPS " + fpsAvg.ToString("0", Inv) + " — попробуйте frame skip Subtle/On в настройках видео "
+                + "(меньше рывков при просадках) и выключите запись игр Windows (GameDVR): tools/setup-highperf.ps1");
+
+        if (tips.Count == 0)
+            return;
+
+        sb.AppendLine();
+        sb.AppendLine("--- Рекомендации (авто, по средним за сессию) ---");
+        foreach (string tip in tips)
+            sb.AppendLine("  - " + tip);
     }
 
     private static void AppendTop(StringBuilder sb, string title, Dictionary<string, int> counts)
@@ -591,6 +658,10 @@ public static class Telemetry
             _gc2Sum += PerfData.Gc2PerSecond;
             _gcPauseSum += PerfData.GcPauseMsPerSecond;
             _allocSum += PerfData.AllocMbPerSecond;
+            // v0.8.10: для авто-рекомендаций в конце сессии.
+            _lightSum += PerfData.LightingMs;
+            _unaccSum += PerfData.UnaccountedMs;
+            _cursorStatus = SmoothCursorSystem.Status;
 
             if (BossPerfMode.Active)
             {

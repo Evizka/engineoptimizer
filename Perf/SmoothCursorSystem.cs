@@ -32,6 +32,7 @@ public sealed class SmoothCursorSystem : ModSystem
     private static Viewport _savedViewport;
 
     private static IntPtr _cursor;
+    private static IntPtr _defaultCursor; // v0.8.10: системная стрелка для отката
     private static int _hotX;
     private static int _hotY;
     private static ulong _pixelHash;
@@ -48,6 +49,11 @@ public sealed class SmoothCursorSystem : ModSystem
     private static long _retryAt;
     private static long _lastErrorLog;
 
+    // v0.8.10: аварийный выключатель (F7). Если аппаратный курсор
+    // спрятался (пустая картинка, конфликт с другим модом) — без мыши
+    // в меню не попасть; клавиша возвращает ванильный курсор немедленно.
+    public static bool UserDisabled;
+
     static SmoothCursorSystem()
     {
         _pixelHash = ulong.MaxValue;
@@ -58,15 +64,23 @@ public sealed class SmoothCursorSystem : ModSystem
 
     public static bool Active => _active;
 
+    // v0.8.10: расширенный статус для оверлея и телеметрии: учитывает
+    // аварийное выключение (F7), меню и конфиг.
     public static string Status
     {
         get
         {
+            if (Main.dedServ)
+                return "-";
+            if (UserDisabled)
+                return "off";
             if (_failed)
                 return "failed";
-            if (_active)
-                return "hw";
-            return "vanilla";
+            if (!ConfigEnabled())
+                return "off";
+            if (Main.gameMenu)
+                return "menu";
+            return _active ? "hw" : "vanilla";
         }
     }
 
@@ -210,18 +224,24 @@ public sealed class SmoothCursorSystem : ModSystem
             return;
         }
 
-        // Не чаще раза в MinRefreshMs.
-        if (_active && PerfData.Now - _lastRefresh < (long)(Stopwatch.Frequency * MinRefreshMs / 1000.0))
+        // v0.8.10: троттлинг и для повторных попыток (раньше — только когда
+        // активны): пустой рендер не гоняется каждый кадр.
+        if (PerfData.Now - _lastRefresh < (long)(Stopwatch.Frequency * MinRefreshMs / 1000.0))
             return;
 
         RenderCursor(over);
 
         _target.GetData(_pixels);
 
-        if (!HasVisiblePixel())
+        // v0.8.10: защита от «исчезнувшего» курсора: в аппаратный курсор
+        // отдаём только заведомо видимую картинку (>= 8 непрозрачных
+        // пикселей). Почти пустой target (пара случайных пикселей от
+        // чужой отрисовки) раньше мог пройти проверку и сделать курсор
+        // невидимым, подавив заодно и ванильную отрисовку.
+        if (CountVisiblePixels(128) < 8)
         {
-            // Пустой кадр (курсор за пределами) — не трогаем SDL.
             _signature = signature;
+            _lastRefresh = PerfData.Now;
             return;
         }
 
@@ -265,19 +285,10 @@ public sealed class SmoothCursorSystem : ModSystem
 
     private static bool ShouldRun()
     {
-        if (_failed || Main.dedServ)
+        if (UserDisabled || _failed || Main.dedServ)
             return false;
 
-        OptimizerConfig config = null;
-        try
-        {
-            config = OptimizerConfig.Instance;
-        }
-        catch
-        {
-        }
-
-        if (config == null || !config.SmoothHardwareCursor)
+        if (!ConfigEnabled())
             return false;
 
         if (Main.gameMenu || Main.alreadyGrabbingSunOrMoon)
@@ -472,16 +483,17 @@ public sealed class SmoothCursorSystem : ModSystem
         _signature = ulong.MaxValue;
     }
 
-    private static bool HasVisiblePixel()
+    // v0.8.10: сколько пикселей непрозрачнее minAlpha — порог видимости.
+    private static int CountVisiblePixels(int minAlpha)
     {
         var pixels = _pixels;
+        int count = 0;
         for (int i = 0; i < pixels.Length; i++)
         {
-            var c = pixels[i];
-            if (c.A != 0 || c.R != 0 || c.G != 0 || c.B != 0)
-                return true;
+            if (pixels[i].A >= minAlpha)
+                count++;
         }
-        return false;
+        return count;
     }
 
     private static bool LooksOpaque()
@@ -532,6 +544,31 @@ public sealed class SmoothCursorSystem : ModSystem
         }
     }
 
+    // v0.8.10: полное выключение по клавише (F7) — ванильный курсор.
+    public static void Disable()
+    {
+        Deactivate();
+        _failed = false;
+        _failures = 0;
+        _retryAt = 0;
+        _lastErrorLog = 0;
+    }
+
+    // v0.8.10: флаг сбоя для оверлея (F6).
+    public static bool Failed => _failed;
+
+    private static bool ConfigEnabled()
+    {
+        try
+        {
+            return OptimizerConfig.Instance != null && OptimizerConfig.Instance.SmoothHardwareCursor;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
     private static void Deactivate()
     {
         _active = false;
@@ -545,7 +582,15 @@ public sealed class SmoothCursorSystem : ModSystem
         {
             try
             {
-                SDL.SDL_SetCursor(IntPtr.Zero);
+                // v0.8.10: возвращаем стандартную системную стрелку, а не
+                // NULL: SDL_SetCursor(NULL) на Windows может оставить
+                // «никакой» курсор, а SDL_FreeCursor по активному курсору
+                // вешает висячий указатель. Стрелку кешируем на всё время
+                // работы процесса (один общий системный курсор).
+                if (_defaultCursor == IntPtr.Zero)
+                    _defaultCursor = SDL.SDL_CreateSystemCursor(SDL.SDL_SystemCursor.SDL_SYSTEM_CURSOR_ARROW);
+                if (_defaultCursor != IntPtr.Zero)
+                    SDL.SDL_SetCursor(_defaultCursor);
             }
             catch
             {

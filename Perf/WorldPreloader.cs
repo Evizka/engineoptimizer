@@ -5,10 +5,14 @@ using Terraria;
 
 namespace EngineOptimizer.Perf;
 
-// Предзагрузка фреймов всех секций мира сразу после входа (только одиночная
-// игра): убирает рывки при ходьбе по новым местам. Работа идёт не секциями,
+// Предзагрузка фреймов всех секций мира сразу после входа (одиночная игра
+// и клиент мультиплеера; на сервере и у хоста netMode 2 не работает):
+// убирает рывки при ходьбе по новым местам. Работа идёт не секциями,
 // а кусками тайлов с проверкой дедлайна после каждого тайла — один Reframe
 // дерева/самоцвета может стоить миллисекунды.
+// v0.8.10: в мультиплеере секции подгружаются с сервера постепенно —
+// недогруженные перепланируются на повторный проход (раз в 15 с), пока
+// не окажутся у клиента.
 public static class WorldPreloader
 {
     public static Action<string> Log;
@@ -37,6 +41,9 @@ public static class WorldPreloader
     private static int _sectionTileTotal;
     private static double _sectionMs;
     private static bool _noMapUpdateSet;
+    private static int _skippedNotLoaded;
+    private static long _retryAt;
+    private const double RetryDelaySeconds = 15.0;
 
     public static bool Active { get; private set; }
     public static bool Failed { get; private set; }
@@ -123,6 +130,8 @@ public static class WorldPreloader
         LastUpdateMs = 0;
         EffectiveBudgetMs = 0;
         _baselineMs = 0;
+        _skippedNotLoaded = 0;
+        _retryAt = 0;
         ResetSectionCursor();
     }
 
@@ -130,7 +139,10 @@ public static class WorldPreloader
     {
         Reset();
 
-        if (Main.dedServ || Main.netMode != 0)
+        // v0.8.10: работаем и в мультиплеере (клиент, netMode 1): предзагрузка
+        // чисто локальная (Reframe не шлёт пакетов), а рывки по недофреймленным
+        // секциям у клиента те же. Хост (netMode 2) и сервер остаются ванильными.
+        if (Main.dedServ || Main.netMode == 2)
             return;
 
         if (Main.sectionManager == null)
@@ -176,6 +188,18 @@ public static class WorldPreloader
         LastUpdateMs = 0;
         EffectiveBudgetMs = 0;
 
+        // v0.8.10: в мультиплеере недогруженные секции приходят с сервера
+        // позже — перепланируем повторный проход, пока всё не зафреймлено.
+        if (!Active && _retryAt != 0)
+        {
+            if (PerfData.Now < _retryAt)
+                return;
+            _retryAt = 0;
+            if (Main.netMode != 2 && !Main.dedServ && !Main.gameMenu)
+                Begin();
+            return;
+        }
+
         if (!Active)
             return;
 
@@ -185,7 +209,7 @@ public static class WorldPreloader
             return;
         }
 
-        if (Main.netMode != 0)
+        if (Main.netMode == 2)
         {
             Reset();
             return;
@@ -297,7 +321,12 @@ public static class WorldPreloader
             var section = _queue[_queueIndex++];
 
             if (!Main.sectionManager.SectionLoaded(section.X, section.Y))
+            {
+                // v0.8.10: секция ещё не пришла с сервера — перепланируем
+                // её на повторный проход (Finish поставит таймер).
+                _skippedNotLoaded++;
                 continue;
+            }
             if (Main.sectionManager.SectionFramed(section.X, section.Y))
                 continue;
 
@@ -338,6 +367,20 @@ public static class WorldPreloader
 
         if (FramedSections > 0)
             Log?.Invoke($"World preload finished: {FramedSections}/{Total} sections framed in {TotalMs:0} ms of work ({Seconds:0.0} s wall), avg {AverageSectionMs:0.0} ms, max {MaxSectionMs:0.0} ms");
+
+        // v0.8.10: мультиплеер — что-то ещё не загружено с сервера;
+        // вернёмся к этому, когда секции доедут (раз в RetryDelaySeconds).
+        if (_skippedNotLoaded > 0 && Main.netMode != 2 && !Main.dedServ && !Failed)
+        {
+            _retryAt = PerfData.Now + (long)(RetryDelaySeconds * Stopwatch.Frequency);
+            if (FramedSections > 0 || _skippedNotLoaded != Total)
+                Log?.Invoke($"World preload: {_skippedNotLoaded} sections are not loaded yet (multiplayer), re-scan in {(int)RetryDelaySeconds} s");
+            _skippedNotLoaded = 0;
+        }
+        else
+        {
+            _skippedNotLoaded = 0;
+        }
     }
 
     private static void ResetSectionCursor()
