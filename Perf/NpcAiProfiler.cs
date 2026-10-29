@@ -185,6 +185,17 @@ public static class NpcAiProfiler
         return result;
     }
 
+    // Строка топа: "type N 'Имя' 1.2ms x3".
+    private static void Append(StringBuilder sb, int type, double ms, int calls)
+    {
+        sb.Append("type ").Append(type.ToString(CultureInfo.InvariantCulture));
+        string name = NpcName(type);
+        if (!string.IsNullOrEmpty(name))
+            sb.Append(" '").Append(name).Append("'");
+        sb.Append(" ").Append(ms.ToString("0.0", CultureInfo.InvariantCulture))
+            .Append("ms x").Append(calls.ToString(CultureInfo.InvariantCulture));
+    }
+
     // Имя типа: ищем живой экземпляр в Main.npc (дёшево, типы из топа
     // почти всегда на месте); если нет — без имени.
     private static string NpcName(int type)
