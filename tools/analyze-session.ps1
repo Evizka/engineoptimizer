@@ -1,4 +1,4 @@
-# analyze-session.ps1 — сводный отчёт по телеметрии EngineOptimizer (v0.8.4+).
+﻿# analyze-session.ps1 — сводный отчёт по телеметрии EngineOptimizer (v0.8.4+).
 #
 # Читает timeline.csv и spikes.csv из папки телеметрии и печатает компактный
 # отчёт: FPS в бою vs вне боя, причины спайков, топ виновников по снарядам

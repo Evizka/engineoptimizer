@@ -1,4 +1,4 @@
-param(
+﻿param(
 	[string]$TerrariaSteamPath = "C:\Program Files (x86)\Steam\steamapps\common\tModLoader\",
 	[string]$Configuration = "Debug"
 )

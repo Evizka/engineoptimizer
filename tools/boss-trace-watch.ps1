@@ -1,4 +1,4 @@
-# boss-trace-watch.ps1 — наблюдатель телеметрии EngineOptimizer v0.8.3.
+﻿# boss-trace-watch.ps1 — наблюдатель телеметрии EngineOptimizer v0.8.3.
 #
 # Следит за live.json (1 запись в секунду) и пишет построчную историю
 # FPS/таймингов с флагом boss_perf: до/во время/после боя. После сессии
