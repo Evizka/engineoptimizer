@@ -1,4 +1,4 @@
 author = A
-version = 0.8.10
+version = 0.8.11
 displayName = Engine Optimizer
 side = Client

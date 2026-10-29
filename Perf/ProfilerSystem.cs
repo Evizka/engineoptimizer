@@ -109,6 +109,9 @@ public sealed class ProfilerSystem : ModSystem
         On_Dust.NewDust += OnNewDust;
         On_Main.DoUpdate_AutoSave += OnDoUpdateAutoSave;
         On_WorldGen.SectionTileFrameWithCheck += OnSectionTileFrameWithCheck;
+
+        // v0.8.11: кто ест время NPC.AI (по типам) — для live.json и итога.
+        NpcAiProfiler.Hook();
     }
 
     public override void Unload()
@@ -131,6 +134,8 @@ public sealed class ProfilerSystem : ModSystem
         On_Dust.NewDust -= OnNewDust;
         On_Main.DoUpdate_AutoSave -= OnDoUpdateAutoSave;
         On_WorldGen.SectionTileFrameWithCheck -= OnSectionTileFrameWithCheck;
+
+        NpcAiProfiler.Unhook();
 
         GoreParallel.Log = null;
         RainParallel.Log = null;
@@ -259,13 +264,18 @@ public sealed class ProfilerSystem : ModSystem
         _tPlayers = 0;
     }
 
-    public override void PreUpdateNPCs() => _tNpcs = PerfData.Now;
+    public override void PreUpdateNPCs()
+    {
+        _tNpcs = PerfData.Now;
+        NpcAiProfiler.BeginFrame();
+    }
 
     public override void PostUpdateNPCs()
     {
         if (_tNpcs != 0)
             PerfData.AddUpdNpcs(PerfData.MsSince(_tNpcs));
         _tNpcs = 0;
+        NpcAiProfiler.EndFrame();
     }
 
     public override void PreUpdateGores()

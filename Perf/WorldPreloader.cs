@@ -44,6 +44,14 @@ public static class WorldPreloader
     private static int _skippedNotLoaded;
     private static long _retryAt;
     private const double RetryDelaySeconds = 15.0;
+    // v0.8.11: центр очереди (секция игрока на момент входа) и окно
+    // ускоренной загрузки после входа/телепорта.
+    private static int _centerSectionX;
+    private static int _centerSectionY;
+    private static long _entryUntil;
+    private const double EntryWindowSeconds = 10.0;
+    private const double ResortEntryWindowSeconds = 4.0;
+    private const int ResortDistanceSq = 8;
 
     public static bool Active { get; private set; }
     public static bool Failed { get; private set; }
@@ -132,6 +140,7 @@ public static class WorldPreloader
         _baselineMs = 0;
         _skippedNotLoaded = 0;
         _retryAt = 0;
+        _entryUntil = 0;
         ResetSectionCursor();
     }
 
@@ -156,6 +165,11 @@ public static class WorldPreloader
         var player = Main.LocalPlayer;
         int playerSectionX = player != null ? (int)(player.Center.X / 16f) / 200 : 0;
         int playerSectionY = player != null ? (int)(player.Center.Y / 16f) / 150 : 0;
+
+        // v0.8.11: запоминаем центр очереди и открываем стартовое окно.
+        _centerSectionX = playerSectionX;
+        _centerSectionY = playerSectionY;
+        _entryUntil = PerfData.Now + (long)(EntryWindowSeconds * Stopwatch.Frequency);
 
         _queue.Clear();
         _queue.Capacity = Math.Max(_queue.Capacity, countX * countY);
@@ -222,7 +236,11 @@ public static class WorldPreloader
             return;
         }
 
-        BeginNoMapUpdate();
+        // v0.8.11: игрок ушёл далеко от точки входа (зеркало/телепорт на базу) —
+        // очередь была отсортирована вокруг старого центра: пересортируем,
+        // иначе молотим секции, где игрока уже нет, а рядом с ним ваниль
+        // рефреймит секции сама (93.5 мс спайк в отчёте v0.8.9).
+        MaybeResort();
 
         long start = PerfData.Now;
         double effectiveBudget = budgetMs;
@@ -230,8 +248,9 @@ public static class WorldPreloader
         if (budgetMs > 0.0)
         {
             // Адаптивный губернатор: из бюджета кадра вычитаем уже потраченное
-            // update+draw (EMA) и оставляем 1 мс запаса.
+            // update+draw и оставляем 1 мс запаса.
             int rate = Main.frameRate > 0 ? Main.frameRate : 60;
+            double target = 1000.0 / Math.Clamp(rate, 30, 240);
 
             double baseline = PerfData.LastUpdateRawMs - previousPreloadMs + PerfData.LastDrawRawMs;
             if (baseline < 0.0)
@@ -242,10 +261,32 @@ public static class WorldPreloader
             else
                 _baselineMs = baseline;
 
-            double headroom = 1000.0 / Math.Clamp(rate, 30, 240) - _baselineMs - 1.0;
+            // v0.8.11: консервативно — максимум из EMA и последнего кадра.
+            // EMA отстаёт на всплесках, и предзагрузка добавляла свои 3 мс
+            // к уже тяжёлому кадру (26 «preload»-спайков в отчёте v0.8.9).
+            double expected = Math.Max(_baselineMs, baseline);
 
-            effectiveBudget = Math.Min(Math.Max(budgetMs, 0.5), Math.Max(headroom, 0.5));
+            // v0.8.11: стартовое окно — первые секунды после входа/телепорта
+            // мир и так кашляет (спавн городских NPC, первые текстуры):
+            // грузим секции ускоренно (мин 5 мс/кадр), чтобы успеть до того,
+            // как игрок дойдёт до незафреймленных мест.
+            bool entryWindow = PerfData.Now < _entryUntil;
+            double headroom = entryWindow
+                ? Math.Max(budgetMs, 5.0)
+                : target - expected - 1.0;
+
+            // v0.8.11: предыдущий кадр уже не влез в бюджет — этот срез
+            // пропускаем целиком, ничего не подкладываем сверху.
+            if (!entryWindow && PerfData.FrameMs > target * 1.5)
+                headroom = 0.0;
+
+            if (headroom <= 0.0)
+                return;
+
+            effectiveBudget = Math.Min(budgetMs, headroom);
         }
+
+        BeginNoMapUpdate();
 
         EffectiveBudgetMs = effectiveBudget;
         long workMark = start;
@@ -312,6 +353,43 @@ public static class WorldPreloader
         {
             LastUpdateMs = PerfData.MsSince(start);
         }
+    }
+
+    // v0.8.11: игрок телепортировался/ушёл далеко от центра очереди —
+    // пересортируем от него. Уже зафреймленные секции пропускаются
+    // быстро (проверка SectionFramed), так что повторный проход дёшев.
+    private static void MaybeResort()
+    {
+        var player = Main.LocalPlayer;
+        if (player == null || !player.active)
+            return;
+
+        int px = (int)(player.Center.X / 16f) / 200;
+        int py = (int)(player.Center.Y / 16f) / 150;
+        int dx = px - _centerSectionX;
+        int dy = py - _centerSectionY;
+        if (dx * dx + dy * dy < ResortDistanceSq)
+            return;
+
+        _centerSectionX = px;
+        _centerSectionY = py;
+
+        for (int i = 0; i < _queue.Count; i++)
+        {
+            var s = _queue[i];
+            int ex = s.X - px;
+            int ey = s.Y - py;
+            s.DistanceSq = ex * ex + ey * ey;
+            _queue[i] = s;
+        }
+
+        _queue.Sort((a, b) => a.DistanceSq.CompareTo(b.DistanceSq));
+        _queueIndex = 0;
+
+        // Короткое «ускоренное» окно на новом месте.
+        _entryUntil = PerfData.Now + (long)(ResortEntryWindowSeconds * Stopwatch.Frequency);
+
+        Log?.Invoke($"World preload re-centered on player (section {px},{py}); {FramedSections}/{Total} sections framed so far");
     }
 
     private static bool StartNextSection()

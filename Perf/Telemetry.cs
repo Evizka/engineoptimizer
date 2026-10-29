@@ -144,6 +144,7 @@ public static class Telemetry
         _gc0Sum = _gc2Sum = _gcPauseSum = _allocSum = 0.0;
         _lightSum = _unaccSum = 0.0;
         _cursorStatus = "";
+        NpcAiProfiler.ResetSession();
         _sessionStartDt = DateTime.Now;
         _lastWriteTs = 0;
         _lastTimelineTs = 0;
@@ -292,6 +293,16 @@ public static class Telemetry
             AppendTop(sb, "projectile_top (кто плодит снаряды):", _projTopCounts);
             AppendTop(sb, "npc_top (кто плодит NPC):", _npcTopCounts);
 
+            // v0.8.11: кто ест время NPC-апдейта за сессию (по типам).
+            var aiTop = NpcAiProfiler.SessionTop(5);
+            if (aiTop.Count > 0)
+            {
+                sb.AppendLine("--- npc_ai_top (кто ест время NPC-апдейта) ---");
+                foreach (string line in aiTop)
+                    sb.AppendLine(line);
+                sb.AppendLine();
+            }
+
             sb.AppendLine("--- Худшие кадры сессии (топ " + _worst.Count + ") ---");
             foreach (var s in _worst)
             {
@@ -343,6 +354,9 @@ public static class Telemetry
             if (vsync && (Math.Abs(fpsAvg - 60.0) < 3.0 || Math.Abs(fpsAvg - 120.0) < 5.0 || Math.Abs(fpsAvg - 144.0) < 6.0))
                 tips.Add("vsync включен, а средний FPS упирается ровно в частоту монитора ("
                     + fpsAvg.ToString("0", Inv) + ") — для большего FPS выключите vsync в настройках видео");
+            else if (vsync && fpsAvg >= 50.0)
+                tips.Add("vsync включен, средний FPS " + fpsAvg.ToString("0", Inv)
+                    + " — это практически потолок монитора; ровная картинка, но выжать больше без выключения vsync не получится");
             else if (vsync && fpsAvg < 55.0)
                 tips.Add("vsync включен: при просадках он добавляет рывки — попробуйте выключить в настройках видео");
         }
@@ -714,6 +728,15 @@ public static class Telemetry
         Num(sb, "upd_time_ms", PerfData.UpdTimeMs);
         Num(sb, "upd_world_ms", PerfData.UpdWorldMs);
         Num(sb, "upd_invasions_ms", PerfData.UpdInvasionsMs);
+        // v0.8.11: сколько update осталось за пределами известных секций
+        // (в отчёте v0.8.9 при ходьбе cpu_update 15-22 мс, а секции ~7-10).
+        Num(sb, "upd_other_ms", Math.Max(0, PerfData.UpdateMs
+            - (PerfData.UpdPlayersMs + PerfData.UpdNpcsMs + PerfData.UpdGoresMs
+                + PerfData.UpdProjectilesMs + PerfData.UpdItemsMs + PerfData.UpdDustMs
+                + PerfData.UpdTimeMs + PerfData.UpdWorldMs + PerfData.UpdInvasionsMs)));
+        // v0.8.11: кто ест NPC.AI в последнем кадре (тип, мс, вызовы).
+        Num(sb, "npc_ai_ms", NpcAiProfiler.FrameMs);
+        Str(sb, "npc_ai_top", NpcAiProfiler.FrameTop);
         Num(sb, "gore_par_ms", PerfData.GoreParallelMs);
         Num(sb, "gore_par_n", PerfData.GoreParallelCount);
         Num(sb, "rain_par_ms", PerfData.RainParallelMs);
