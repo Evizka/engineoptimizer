@@ -176,6 +176,10 @@ public sealed class ProfilerSystem : ModSystem
         WorldPreloader.Reset();
         Telemetry.Flush(1500);
 
+        // v0.8.9: итог «от чего лагало» — last-session.txt в папке
+        // телеметрии (отдаётся через tools/send-report.ps1 или прямо).
+        Telemetry.WriteSummary();
+
         try
         {
             if (PerfData.SaveReport)

@@ -42,6 +42,26 @@ public static class Telemetry
     private static long _lastTimelineTs;
     private static long _sessionStartTs;
 
+    // ---- накопители сессии (для last-session.txt, v0.8.9) ----
+    // Считаются между Reset (вход в мир) и WriteSummary (выход из мира):
+    // по ним мод сам отвечает «от чего лагало» без ручного разбора CSV.
+    private static DateTime _sessionStartDt;
+    private sealed class CauseStat { public int Count; public double Sum; public double Max; }
+    private static readonly Dictionary<string, CauseStat> _causeStats = new Dictionary<string, CauseStat>(8);
+    private static readonly Dictionary<string, int> _projTopCounts = new Dictionary<string, int>(16);
+    private static readonly Dictionary<string, int> _npcTopCounts = new Dictionary<string, int>(16);
+    private static readonly List<Spike> _worst = new List<Spike>(24);
+    private const int WorstLimit = 20;
+    private const int TopCap = 64;
+
+    private static int _statFpsN;
+    private static double _statFpsSum, _statFrameSum, _statUpdSum, _statDrawSum;
+    private static int _fightN;
+    private static double _fightFpsSum, _fightFrameSum;
+    private static int _calmN;
+    private static double _calmFpsSum, _calmFrameSum;
+    private static double _gc0Sum, _gc2Sum, _gcPauseSum, _allocSum;
+
     private static string _dir;
     private static Process _proc;
     private static TimeSpan _lastProcCpu;
@@ -109,6 +129,18 @@ public static class Telemetry
         SpikeCsv.Clear();
         SpikeTimes.Clear();
         SpikeCauses.Clear();
+        _causeStats.Clear();
+        _projTopCounts.Clear();
+        _npcTopCounts.Clear();
+        _worst.Clear();
+        _statFpsN = 0;
+        _statFpsSum = _statFrameSum = _statUpdSum = _statDrawSum = 0.0;
+        _fightN = 0;
+        _fightFpsSum = _fightFrameSum = 0.0;
+        _calmN = 0;
+        _calmFpsSum = _calmFrameSum = 0.0;
+        _gc0Sum = _gc2Sum = _gcPauseSum = _allocSum = 0.0;
+        _sessionStartDt = DateTime.Now;
         _lastWriteTs = 0;
         _lastTimelineTs = 0;
         _sessionStartTs = PerfData.Now;
@@ -186,6 +218,109 @@ public static class Telemetry
 
     public static void Flush(int timeoutMs) =>
         AsyncFileWriter.Flush(timeoutMs);
+
+    // v0.8.9: итоговый файл сессии last-session.txt — «от чего лагало»,
+    // одним текстом. Пишется при выходе из мира; приложение его в чат
+    // (или файл от tools/send-report.ps1) — и по нему правится мод.
+    public static void WriteSummary()
+    {
+        try
+        {
+            double minutes = (PerfData.Now - _sessionStartTs) / (double)Stopwatch.Frequency / 60.0;
+
+            var sb = new StringBuilder(4096);
+            sb.AppendLine("=== EngineOptimizer — автоматическая сводка сессии ===");
+            sb.AppendLine("Файл создан модом при выходе из мира. Приложите его в чат с");
+            sb.AppendLine("ассистентом (или запустите tools/send-report.ps1 — он соберёт больше)");
+            sb.AppendLine("— по этим данным правится следующая версия мода.");
+            sb.AppendLine();
+            sb.AppendLine("started: " + _sessionStartDt.ToString("yyyy-MM-dd HH:mm:ss", Inv));
+            sb.AppendLine("duration_min: " + minutes.ToString("0.0", Inv));
+            sb.AppendLine("world: " + Main.worldName);
+            sb.AppendLine();
+
+            sb.AppendLine("--- Кадр в среднем ---");
+            if (_statFpsN > 0)
+            {
+                sb.AppendLine("fps_avg: " + (_statFpsSum / _statFpsN).ToString("0.0", Inv)
+                    + "  frame_ms: " + (_statFrameSum / _statFpsN).ToString("0.0", Inv)
+                    + "  update_ms: " + (_statUpdSum / _statFpsN).ToString("0.00", Inv)
+                    + "  draw_ms: " + (_statDrawSum / _statFpsN).ToString("0.00", Inv));
+                sb.AppendLine("gc: gen0 " + (_gc0Sum / _statFpsN).ToString("0.0", Inv)
+                    + "/s  gen2 " + (_gc2Sum / _statFpsN).ToString("0.00", Inv)
+                    + "/s  pause " + (_gcPauseSum / _statFpsN).ToString("0.0", Inv)
+                    + " ms/s  alloc " + (_allocSum / _statFpsN).ToString("0.0", Inv) + " MB/s");
+            }
+            else
+            {
+                sb.AppendLine("(в мире не были)");
+            }
+
+            if (_fightN > 0)
+                sb.AppendLine("БОЙ: " + _fightN + " s  fps_avg " + (_fightFpsSum / _fightN).ToString("0.0", Inv)
+                    + "  frame_ms " + (_fightFrameSum / _fightN).ToString("0.0", Inv));
+            if (_calmN > 0)
+                sb.AppendLine("вне боя: " + _calmN + " s  fps_avg " + (_calmFpsSum / _calmN).ToString("0.0", Inv)
+                    + "  frame_ms " + (_calmFrameSum / _calmN).ToString("0.0", Inv));
+            sb.AppendLine("boss_perf: " + (BossPerfMode.AnyHook ? "hooks " + BossPerfMode.HookSummary() : "no hooks"));
+            sb.AppendLine();
+
+            sb.AppendLine("--- Спайки (кадры > 25 мс): от чего лагало ---");
+            int total = 0;
+            foreach (var kv in _causeStats)
+                total += kv.Value.Count;
+            sb.AppendLine("total: " + total);
+            var causes = new List<KeyValuePair<string, CauseStat>>(_causeStats);
+            causes.Sort((a, b) => b.Value.Count.CompareTo(a.Value.Count));
+            foreach (var kv in causes)
+            {
+                var cs = kv.Value;
+                sb.AppendLine("  " + kv.Key + ": " + cs.Count
+                    + "  avg " + (cs.Sum / cs.Count).ToString("0.0", Inv)
+                    + "  max " + cs.Max.ToString("0.0", Inv) + " ms");
+            }
+            sb.AppendLine();
+
+            AppendTop(sb, "projectile_top (кто плодит снаряды):", _projTopCounts);
+            AppendTop(sb, "npc_top (кто плодит NPC):", _npcTopCounts);
+
+            sb.AppendLine("--- Худшие кадры сессии (топ " + _worst.Count + ") ---");
+            foreach (var s in _worst)
+            {
+                sb.AppendLine("  " + s.At.ToString("HH:mm:ss", Inv)
+                    + "  " + s.FrameMs.ToString("0.0", Inv) + " ms"
+                    + "  cause=" + s.Cause
+                    + "  upd=" + s.UpdateMs.ToString("0.0", Inv)
+                    + "  draw=" + s.DrawMs.ToString("0.0", Inv)
+                    + "  proj=" + s.ProjectileCount
+                    + "  npc=" + s.NpcCount
+                    + (string.IsNullOrEmpty(s.Bosses) ? "" : "  bosses=" + s.Bosses)
+                    + (string.IsNullOrEmpty(s.ProjTop) ? "" : "  proj_top=" + s.ProjTop)
+                    + (string.IsNullOrEmpty(s.NpcTop) ? "" : "  npc_top=" + s.NpcTop));
+            }
+
+            // Перезапись (Atomic), а не Append: иначе сводки сессий
+            // накопились бы в одном файле.
+            AsyncFileWriter.WriteAtomic(Path.Combine(Dir, "last-session.txt"), sb.ToString());
+        }
+        catch
+        {
+        }
+    }
+
+    private static void AppendTop(StringBuilder sb, string title, Dictionary<string, int> counts)
+    {
+        if (counts.Count == 0)
+            return;
+
+        sb.AppendLine("--- " + title + " ---");
+        var list = new List<KeyValuePair<string, int>>(counts);
+        list.Sort((a, b) => b.Value.CompareTo(a.Value));
+        int limit = Math.Min(10, list.Count);
+        for (int i = 0; i < limit; i++)
+            sb.AppendLine("  [" + list[i].Value + "x] " + list[i].Key);
+        sb.AppendLine();
+    }
 
     // session.json: окружение, настройки мода, список модов.
     public static void WriteSession()
@@ -344,6 +479,36 @@ public static class Telemetry
         if (Spikes.Count > 256)
             Spikes.RemoveAt(0);
 
+        // v0.8.9: копим итоги сессии для last-session.txt.
+        if (_causeStats.TryGetValue(spike.Cause, out var stat))
+        {
+            stat.Count++;
+            stat.Sum += frameMs;
+            if (frameMs > stat.Max)
+                stat.Max = frameMs;
+        }
+        else
+        {
+            _causeStats[spike.Cause] = new CauseStat { Count = 1, Sum = frameMs, Max = frameMs };
+        }
+
+        if (!string.IsNullOrEmpty(spike.ProjTop) && _projTopCounts.Count < TopCap)
+            _projTopCounts[spike.ProjTop] = _projTopCounts.TryGetValue(spike.ProjTop, out int pc) ? pc + 1 : 1;
+
+        if (!string.IsNullOrEmpty(spike.NpcTop) && _npcTopCounts.Count < TopCap)
+            _npcTopCounts[spike.NpcTop] = _npcTopCounts.TryGetValue(spike.NpcTop, out int nc) ? nc + 1 : 1;
+
+        if (_worst.Count < WorstLimit)
+        {
+            _worst.Add(spike);
+            _worst.Sort((a, b) => b.FrameMs.CompareTo(a.FrameMs));
+        }
+        else if (frameMs > _worst[_worst.Count - 1].FrameMs)
+        {
+            _worst[_worst.Count - 1] = spike;
+            _worst.Sort((a, b) => b.FrameMs.CompareTo(a.FrameMs));
+        }
+
         SpikeTimes.Add(PerfData.Now);
         SpikeCauses.Add(spike.Cause);
 
@@ -413,6 +578,33 @@ public static class Telemetry
         int preloadSpikesLastMinute = PreloadSpikesLastMinute;
 
         SampleProcess();
+
+        // v0.8.9: 1 Гц-сэмплы для итога сессии (не каждый кадр — дёшево).
+        if (!Main.gameMenu)
+        {
+            _statFpsN++;
+            _statFpsSum += PerfData.SmoothedFps;
+            _statFrameSum += PerfData.FrameMs;
+            _statUpdSum += PerfData.UpdateMs;
+            _statDrawSum += PerfData.DrawMs;
+            _gc0Sum += PerfData.Gc0PerSecond;
+            _gc2Sum += PerfData.Gc2PerSecond;
+            _gcPauseSum += PerfData.GcPauseMsPerSecond;
+            _allocSum += PerfData.AllocMbPerSecond;
+
+            if (BossPerfMode.Active)
+            {
+                _fightN++;
+                _fightFpsSum += PerfData.SmoothedFps;
+                _fightFrameSum += PerfData.FrameMs;
+            }
+            else
+            {
+                _calmN++;
+                _calmFpsSum += PerfData.SmoothedFps;
+                _calmFrameSum += PerfData.FrameMs;
+            }
+        }
 
         var sb = new StringBuilder(2048);
         sb.Append('{');
