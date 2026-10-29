@@ -26,17 +26,15 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          set -euo pipefail
+          set -uo pipefail
           TAG="${{ inputs.tag || github.ref_name }}"
           echo "Релиз: $TAG"
 
-          git clone --quiet --depth 1 --branch ci-build \
-            "https://github.com/${GITHUB_REPOSITORY}.git" /tmp/ci
-          ls -la /tmp/ci/*.tmod
+          step() { if out=$(eval "$1" 2>&1); then echo "[ok] $2"; else echo "::error::$2: $(echo "$out" | tr '\n' ' ' | head -c 300)"; exit 1; fi }
 
-          cp /tmp/ci/EngineOptimizer.tmod .
-          ls -la EngineOptimizer.tmod
-
-          # --clobber: перезаливаем, если ассет уже есть
-          gh release upload "$TAG" EngineOptimizer.tmod --clobber
+          step "git clone --quiet --depth 1 --branch ci-build https://github.com/${GITHUB_REPOSITORY}.git /tmp/ci" "clone-ci-build"
+          step "ls /tmp/ci/*.tmod" "tmod-exists"
+          step "cp /tmp/ci/EngineOptimizer.tmod ." "copy"
+          # -R: без checkout раннер не в git-репозитории, gh сам репо не найдёт
+          step "gh release upload '$TAG' EngineOptimizer.tmod --clobber -R '${GITHUB_REPOSITORY}'" "upload"
           echo "Готово: ассет залит в $TAG"
