@@ -1,0 +1,121 @@
+name: build
+
+# Сборка мода на настоящем tModLoader. Результат (EngineOptimizer.tmod)
+# пушится в ветку ci-build (orphan, force) + аттачится артефактом.
+#
+# ВАЖНО: tML-билдер пакует в .tmod всё содержимое папки csproj, поэтому
+# tModLoader и вспомогательные файлы живут в /tmp, а исходники копируются
+# в чистую /tmp/EngineOptimizer — имя папки задаёт имя мода
+# (иначе .tmod раздувается до 100+ МБ и не пушится).
+on:
+  push:
+    branches-ignore: [ci-build]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET 8
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Download tModLoader (2026.08.3.0 stable)
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fL -o /tmp/tModLoader.zip "https://github.com/tModLoader/tModLoader/releases/download/v2026.08.3.0/tModLoader.zip"
+          mkdir -p /tmp/tML
+          unzip -q /tmp/tModLoader.zip -d /tmp/tML
+          test -f /tmp/tML/tModLoader.dll
+          test -f /tmp/tML/tMLMod.targets
+          echo "tModLoader готов: $(ls /tmp/tML | wc -l) файлов"
+
+      - name: Prepare clean source dir
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/EngineOptimizer
+          rsync -a \
+            --exclude '.git/' --exclude '.github/' --exclude 'tools/' \
+            --exclude '*.tmod' --exclude 'enabled.json' --exclude 'BTitles_shown.dat' \
+            --exclude 'build.ps1' --exclude 'dist/' \
+            "$GITHUB_WORKSPACE/" /tmp/EngineOptimizer/
+          echo "--- /tmp/EngineOptimizer ---"
+          ls -la /tmp/EngineOptimizer
+          du -sh /tmp/EngineOptimizer
+
+      - name: Build mod
+        shell: bash
+        run: |
+          set -euo pipefail
+          dotnet --info | head -5
+          dotnet build /tmp/EngineOptimizer/EngineOptimizer.csproj -c Release -p:TerrariaSteamPath=/tmp/tML/
+
+      - name: Collect output
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "=== ищем .tmod ==="
+          find "$HOME" /tmp/EngineOptimizer -name '*.tmod' 2>/dev/null || true
+          mkdir -p dist
+          find "$HOME" /tmp/EngineOptimizer -name '*.tmod' -exec cp {} dist/ \; || true
+          ls -la dist
+          if [ -z "$(ls dist/*.tmod 2>/dev/null)" ]; then
+            echo "::error::.tmod не найден после сборки — смотреть лог Build mod"
+            exit 1
+          fi
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: EngineOptimizer-tmod
+          path: dist/*
+          if-no-files-found: error
+
+      - name: Push .tmod to ci-build branch
+        if: ${{ hashFiles('dist/*.tmod') != '' }}
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -uo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          step() { if out=$(eval "$1" 2>&1); then echo "[ok] $2"; else echo "::error::$2: $(echo "$out" | tr '\n' ' ' | head -c 220)"; exit 1; fi }
+
+          step "git checkout --orphan ci-build" "checkout-orphan"
+          step "git rm -rf -q ." "git-rm"
+          step "cp dist/*.tmod ." "copy-tmod"
+          step "git add -f *.tmod" "git-add"
+          step "git commit -m 'EngineOptimizer build of ${GITHUB_SHA::12}'" "commit"
+
+          if out=$(git push --force origin ci-build 2>&1); then
+            echo "[ok] push"
+          else
+            echo "::warning::git push failed ($(echo "$out" | tr '\n' ' ' | head -c 220)) — trying Contents API"
+            # Фолбэк: ветка + файл через GitHub API (gh есть на раннере).
+            REPO="repos/${GITHUB_REPOSITORY}"
+            BASE=$(gh api "$REPO/git/ref/heads/main" --jq .object.sha)
+            if ! gh api "$REPO/git/ref/heads/ci-build" >/dev/null 2>&1; then
+              gh api "$REPO/git/refs" -f ref="refs/heads/ci-build" -f sha="$BASE" >/dev/null
+            fi
+            for F in *.tmod; do
+              B64=$(base64 -w0 "$F")
+              EXISTING=$(gh api "$REPO/contents/$F?ref=ci-build" --jq .sha 2>/dev/null || true)
+              if [ -n "$EXISTING" ]; then
+                gh api -X PUT "$REPO/contents/$F" -f message="EngineOptimizer build of ${GITHUB_SHA::12}" -f content="$B64" -f branch=ci-build -f sha="$EXISTING" >/dev/null
+              else
+                gh api -X PUT "$REPO/contents/$F" -f message="EngineOptimizer build of ${GITHUB_SHA::12}" -f content="$B64" -f branch=ci-build >/dev/null
+              fi
+            done
+            echo "[ok] uploaded via API"
+          fi

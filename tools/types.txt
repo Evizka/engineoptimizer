@@ -1,0 +1,692 @@
+
+===== TYPE [1] <Module>  ()  [файл: ?] 
+
+===== TYPE [2] EngineOptimizer.EngineOptimizer : Terraria.ModLoader.Mod  (sealed public)  [файл: EngineOptimizer.cs] 
+  .method rid=1 L12 Load
+  .method rid=2 LNone .ctor
+
+===== TYPE [3] EngineOptimizer.OptimizerConfig : Terraria.ModLoader.Config.ModConfig  (sealed public)  [файл: OptimizerConfig.cs] 
+  .field private bool <ShowOverlayOnStart>k__BackingField [System.Runtime.CompilerServices.CompilerGeneratedAttribute]
+  .field private bool <SaveReportOnWorldExit>k__BackingField [System.Runtime.CompilerServices.CompilerGeneratedAttribute]
+  .field private bool <ReduceGcPauses>k__BackingField [System.Runtime.CompilerServices.CompilerGeneratedAttribute]
+  .field private bool <DeferAutosaveDuringBoss>k__BackingField [System.Runtime.CompilerServices.CompilerGeneratedAttribute]
+  .field private bool <ParallelGore>k__BackingField [System.Runtime.CompilerServices.CompilerGeneratedAttribute]
+  .field private bool <ParallelRain>k__BackingField [System.Runtime.CompilerServices.CompilerGeneratedAttribute]
+  .field private bool <PreloadWorld>k__BackingField [System.Runtime.CompilerServices.CompilerGeneratedAttribute]
+  .field private int <PreloadBudgetMs>k__BackingField [System.Runtime.CompilerServices.CompilerGeneratedAttribute]
+  .field private bool <SmoothHardwareCursor>k__BackingField [System.Runtime.CompilerServices.CompilerGeneratedAttribute]
+  .method rid=3 L9 get_Mode
+  .method rid=4 L12 get_ShowOverlayOnStart
+  .method rid=5 L12 set_ShowOverlayOnStart
+  .method rid=6 L15 get_SaveReportOnWorldExit
+  .method rid=7 L15 set_SaveReportOnWorldExit
+  .method rid=8 L23 get_ReduceGcPauses
+  .method rid=9 L23 set_ReduceGcPauses
+  .method rid=10 L30 get_DeferAutosaveDuringBoss
+  .method rid=11 L30 set_DeferAutosaveDuringBoss
+  .method rid=12 L39 get_ParallelGore
+  .method rid=13 L39 set_ParallelGore
+  .method rid=14 L48 get_ParallelRain
+  .method rid=15 L48 set_ParallelRain
+  .method rid=16 L58 get_PreloadWorld
+  .method rid=17 L58 set_PreloadWorld
+  .method rid=18 L68 get_PreloadBudgetMs
+  .method rid=19 L68 set_PreloadBudgetMs
+  .method rid=20 L79 get_SmoothHardwareCursor
+  .method rid=21 L79 set_SmoothHardwareCursor
+  .method rid=22 L81 get_Instance
+  .method rid=23 L12 .ctor
+
+===== TYPE [4] EngineOptimizer.Perf.AsyncFileWriter : System.Object  (abstract sealed)  [файл: Perf/AsyncFileWriter.cs] 
+  .field private static const int QueueLimit = 256 
+  .field private static readonly System.Text.Encoding Utf8NoBom 
+  .field private static readonly object Gate 
+  .field private static readonly System.Collections.Generic.Queue`1<Pending> Queue 
+  .field private static readonly System.Threading.AutoResetEvent Signal 
+  .field private static Worker _worker 
+  .field private static int _inFlight 
+  .field public static int Dropped 
+  .field public static int Failed 
+  .method rid=24 L37 Start
+  .method rid=25 L57 WriteAtomic
+  .method rid=26 L63 Append
+  .method rid=27 L68 Flush
+  .method rid=28 L85 Stop
+  .method rid=29 L100 Enqueue
+  .method rid=30 L116 Loop
+  .method rid=31 L152 Write
+  .method rid=32 L20 .cctor
+
+===== TYPE [5] EngineOptimizer.Perf.KeybindProfileGuard : System.Object  (abstract sealed)  [файл: Perf/KeybindProfileGuard.cs] 
+  .field public static System.Action`1<string> Log 
+  .field private static System.Reflection.FieldInfo _keybindsField 
+  .field private static bool _resolved 
+  .field private static object _lastProfile 
+  .field private static int _lastKeybindCount 
+  .field private static bool _satisfied 
+  .field private static bool _repairLogged 
+  .method rid=33 L39 Reset
+  .method rid=34 L51 Ensure
+  .method rid=35 L105 Resolve
+  .method rid=36 L33 .cctor
+
+===== TYPE [6] EngineOptimizer.Perf.ThreadLocalRandom : Terraria.Utilities.UnifiedRandom  (sealed)  [файл: Perf/ParallelUpdates.cs] 
+  .field public static readonly EngineOptimizer.Perf.ThreadLocalRandom Instance 
+  .field private static Terraria.Utilities.UnifiedRandom _local [System.ThreadStaticAttribute]
+  .field private static int _seed 
+  .method rid=37 L28 get_Local
+  .method rid=38 L40 Next
+  .method rid=39 L42 Next
+  .method rid=40 L44 Next
+  .method rid=41 L46 NextDouble
+  .method rid=42 L48 NextBytes
+  .method rid=43 L50 Sample
+  .method rid=44 LNone .ctor
+  .method rid=45 L19 .cctor
+
+===== TYPE [7] EngineOptimizer.Perf.ParallelEffects : System.Object  (abstract sealed)  [файл: Perf/ParallelUpdates.cs] 
+  .field public static readonly object Lock 
+  .field public static et(0x1f) Busy 
+  .method rid=46 L63 .cctor
+
+===== TYPE [8] EngineOptimizer.Perf.GoreParallel : System.Object  (abstract sealed)  [файл: Perf/ParallelUpdates.cs] 
+  .field public static const int MinCount = 128 
+  .field public static System.Action`1<string> Log 
+  .field public static bool Failed 
+  .field public static double LastMs 
+  .field public static int LastCount 
+  .field private static readonly System.Collections.Generic.HashSet`1<Terraria.Gore> Safe 
+  .field private static readonly bool[] SafeFlags 
+  .field private static bool _skipVanilla 
+  .field private static bool _parallelPhase 
+  .field private static et(0x1f) _running 
+  .field private static int _phaseId 
+  .field private static System.Exception _error 
+  .field private static int _errors 
+  .method rid=47 L101 get_Enabled
+  .method rid=48 L106 Reset
+  .method rid=49 L114 End
+  .method rid=50 L120 ShouldSkip
+  .method rid=51 L126 Run
+  .method rid=52 L226 UpdateRange
+  .method rid=53 L92 .cctor
+
+===== TYPE [9] EngineOptimizer.Perf.RainParallel : System.Object  (abstract sealed)  [файл: Perf/ParallelUpdates.cs] 
+  .field public static const int MinCount = 400 
+  .field public static System.Action`1<string> Log 
+  .field public static bool Failed 
+  .field public static double LastMs 
+  .field public static int LastCount 
+  .field private static bool _skipVanilla 
+  .field private static bool _parallelPhase 
+  .field private static et(0x1f) _running 
+  .field private static int _phaseId 
+  .field private static System.Exception _error 
+  .method rid=54 L286 get_Enabled
+  .method rid=55 L291 Reset
+  .method rid=56 L298 End
+  .method rid=57 L304 ShouldSkip
+  .method rid=58 L310 Begin
+  .method rid=59 L374 UpdateRange
+
+===== TYPE [10] EngineOptimizer.Perf.PerfData : System.Object  (abstract sealed)  [файл: Perf/PerfData.cs] 
+  .field public static const double TargetFrameMs = 16.666667 
+  .field public static const double SpikeThresholdMs = 25.0 
+  .field public static bool Visible 
+  .field public static bool SaveReport 
+  .field private static long _lastDrawTs 
+  .field private static long _lastUpdateTs 
+  .field public static double UpdateCpuMs 
+  .field private static double _drawCpuMs 
+  .field private static double _lightMs 
+  .field private static double _tilesMs 
+  .field private static double _wallsMs 
+  .field private static double _backgroundMs 
+  .field private static double _dustMs 
+  .field private static double _projectilesMs 
+  .field private static double _npcMs 
+  .field private static double _itemsMs 
+  .field private static double _updPlayersMs 
+  .field private static double _updNpcsMs 
+  .field private static double _updGoresMs 
+  .field private static double _updProjectilesMs 
+  .field private static double _updItemsMs 
+  .field private static double _updDustMs 
+  .field private static double _updTimeMs 
+  .field private static double _updWorldMs 
+  .field private static double _updInvasionsMs 
+  .field private static double _goreParMs 
+  .field private static double _rainParMs 
+  .field private static int _goreParCount 
+  .field private static int _rainParCount 
+  .field private static double _cursorMs 
+  .field private static double _sectionMs 
+  .field private static int _sectionCount 
+  .field public static double FrameMs 
+  .field public static double UpdateMs 
+  .field public static double DrawMs 
+  .field public static double LightingMs 
+  .field public static double TilesMs 
+  .field public static double WallsMs 
+  .field public static double BackgroundMs 
+  .field public static double DustMs 
+  .field public static double ProjectilesMs 
+  .field public static double NpcsMs 
+  .field public static double ItemsMs 
+  .field public static double UpdPlayersMs 
+  .field public static double UpdNpcsMs 
+  .field public static double UpdGoresMs 
+  .field public static double UpdProjectilesMs 
+  .field public static double UpdItemsMs 
+  .field public static double UpdDustMs 
+  .field public static double UpdTimeMs 
+  .field public static double UpdWorldMs 
+  .field public static double UpdInvasionsMs 
+  .field public static double GoreParallelMs 
+  .field public static int GoreParallelCount 
+  .field public static long GoreParallelTotal 
+  .field public static double RainParallelMs 
+  .field public static int RainParallelCount 
+  .field public static long RainParallelTotal 
+  .field public static double CursorMs 
+  .field public static double SaveThisFrameMs 
+  .field public static double SaveMs 
+  .field public static int SaveCount 
+  .field private static double _saveMsThisFrame 
+  .field public static double GcPauseThisFrameMs 
+  .field public static double UnaccountedMs 
+  .field public static double PreloadMsThisFrame 
+  .field private static System.TimeSpan _lastPauseTotal 
+  .field private static long _pauseSampleTs 
+  .field public static double SectionMs 
+  .field public static int SectionCount 
+  .field public static FrameSections LastSections 
+  .field public static double DrawHz 
+  .field public static double UpdateHz 
+  .field public static int GameFps 
+  .field private static int _fpsFrames 
+  .field private static long _fpsWindowTs 
+  .field public static double FpsCount 
+  .field public static double Gc0PerSecond 
+  .field public static double Gc2PerSecond 
+  .field public static double GcPauseMsPerSecond 
+  .field public static double AllocMbPerSecond 
+  .field public static int DustCount 
+  .field public static int ProjectileCount 
+  .field public static int NpcCount 
+  .field public static int ItemCount 
+  .field public static int AutosaveDeferrals 
+  .field public static const int HistoryLength = 120 
+  .field public static readonly double[] HistoryMs 
+  .field public static int HistoryCount 
+  .field public static int HistoryHead 
+  .field public static double LastFrameRawMs 
+  .field public static double LastUpdateRawMs 
+  .field public static double LastDrawRawMs 
+  .field public static double LastLightRawMs 
+  .field private static long _lastGcTs 
+  .field private static int _lastGc0 
+  .field private static int _lastGc2 
+  .field private static System.TimeSpan _lastGcPause 
+  .field private static long _lastAllocBytes 
+  .field private static int _countdown 
+  .method rid=60 L157 get_SmoothedFps
+  .method rid=61 L190 get_Now
+  .method rid=62 L194 PauseSampleReset
+  .method rid=63 L198 MsSince
+  .method rid=64 L200 MsFromTicks
+  .method rid=65 L204 Ema
+  .method rid=66 L209 OnUpdateStart
+  .method rid=67 L224 OnDrawStart
+  .method rid=68 L238 AddUpdateCpu
+  .method rid=69 L245 NoteSave
+  .method rid=70 L254 AddDrawCpu
+  .method rid=71 L256 AddLight
+  .method rid=72 L258 AddTiles
+  .method rid=73 L260 AddWalls
+  .method rid=74 L262 AddBackground
+  .method rid=75 L264 AddDust
+  .method rid=76 L266 AddProjectiles
+  .method rid=77 L268 AddNpcs
+  .method rid=78 L270 AddItems
+  .method rid=79 L272 AddCursor
+  .method rid=80 L274 AddUpdPlayers
+  .method rid=81 L276 AddUpdNpcs
+  .method rid=82 L278 AddUpdGores
+  .method rid=83 L280 AddUpdProjectiles
+  .method rid=84 L282 AddUpdItems
+  .method rid=85 L284 AddUpdDust
+  .method rid=86 L286 AddUpdTime
+  .method rid=87 L288 AddUpdWorld
+  .method rid=88 L290 AddUpdInvasions
+  .method rid=89 L294 AddSectionFrame
+  .method rid=90 L300 SetGoreParallel
+  .method rid=91 L309 SetRainParallel
+  .method rid=92 L318 EndFrame
+  .method rid=93 L438 ResetAccumulators
+  .method rid=94 L472 ResetAll
+  .method rid=95 L568 SampleGc
+  .method rid=96 L603 CountEntities
+  .method rid=97 L17 .cctor
+
+===== TYPE [11] EngineOptimizer.Perf.PerfLog : System.Object  (abstract sealed)  [файл: Perf/PerfLog.cs] 
+  .field private static const int MaxSamples = 120000 
+  .field private static readonly float[] Frames 
+  .field private static readonly float[] Updates 
+  .field private static readonly float[] Draws 
+  .field private static readonly float[] Lights 
+  .field private static readonly System.Text.Encoding Utf8 
+  .field private static int _count 
+  .method rid=98 L31 Reset
+  .method rid=99 L36 Record
+  .method rid=100 L50 Save
+  .method rid=101 L90 Append
+  .method rid=102 L95 Avg
+  .method rid=103 L104 Max
+  .method rid=104 L115 Percentile
+  .method rid=105 L21 .cctor
+
+===== TYPE [12] EngineOptimizer.Perf.ProfilerSystem : Terraria.ModLoader.ModSystem  (sealed public)  [файл: Perf/ProfilerSystem.cs] 
+  .field public static Terraria.ModLoader.ModKeybind ToggleKey 
+  .field private static EngineOptimizer.OptimizerConfig Settings 
+  .field private bool _configApplied 
+  .field private bool _gcSmoothing 
+  .field private bool _threadPoolTuned 
+  .field private System.Runtime.GCLatencyMode _previousLatency 
+  .field private static const int OverlayRows = 7 
+  .field private static readonly string[] OverlayLabelsLeft 
+  .field private static readonly string[] OverlayValuesLeft 
+  .field private static readonly Microsoft.Xna.Framework.Color[] OverlayColorsLeft 
+  .field private static readonly string[] OverlayLabelsRight 
+  .field private static readonly string[] OverlayValuesRight 
+  .field private static readonly Microsoft.Xna.Framework.Color[] OverlayColorsRight 
+  .field private static string _overlayFps 
+  .field private static string _overlayFrame 
+  .field private static string _overlayGame 
+  .field private static Microsoft.Xna.Framework.Color _overlayFpsColor 
+  .field private static Microsoft.Xna.Framework.Color _overlayFrameColor 
+  .field private static long _overlayBuiltAt 
+  .field private static long _deferStartedAt 
+  .field private static long _tPlayers 
+  .field private static long _tNpcs 
+  .field private static long _tGores 
+  .field private static long _tProjectiles 
+  .field private static long _tItems 
+  .field private static long _tDusts 
+  .field private static long _tTime 
+  .field private static long _tWorld 
+  .field private static long _tInvasions 
+  .method rid=106 L65 ResetSectionTimers
+  .method rid=107 L78 Load
+  .method rid=108 L118 Unload
+  .method rid=109 L163 OnWorldLoad
+  .method rid=110 L186 OnWorldUnload
+  .method rid=111 L212 PostUpdateEverything
+  .method rid=112 L229 PreUpdatePlayers
+  .method rid=113 L234 PostUpdatePlayers
+  .method rid=114 L242 PreUpdateNPCs
+  .method rid=115 L247 PostUpdateNPCs
+  .method rid=116 L255 PreUpdateGores
+  .method rid=117 L261 PostUpdateGores
+  .method rid=118 L271 PreUpdateProjectiles
+  .method rid=119 L276 PostUpdateProjectiles
+  .method rid=120 L284 PreUpdateItems
+  .method rid=121 L289 PostUpdateItems
+  .method rid=122 L297 PreUpdateDusts
+  .method rid=123 L302 PostUpdateDusts
+  .method rid=124 L310 PreUpdateTime
+  .method rid=125 L315 PostUpdateTime
+  .method rid=126 L323 PreUpdateWorld
+  .method rid=127 L328 PostUpdateWorld
+  .method rid=128 L336 PreUpdateInvasions
+  .method rid=129 L341 PostUpdateInvasions
+  .method rid=130 L349 ApplyConfig
+  .method rid=131 L370 ApplyGcSettings
+  .method rid=132 L396 RestoreGc
+  .method rid=133 L416 TuneThreadPool
+  .method rid=134 L444 OnDoUpdate
+  .method rid=135 L459 OnDoDraw
+  .method rid=136 L473 OnRenderTiles
+  .method rid=137 L484 OnRenderTiles2
+  .method rid=138 L495 OnRenderWalls
+  .method rid=139 L506 OnRenderBackground
+  .method rid=140 L517 OnDrawDust
+  .method rid=141 L528 OnDrawProjectiles
+  .method rid=142 L539 OnDrawNpcs
+  .method rid=143 L550 OnDrawItems
+  .method rid=144 L561 OnLightTiles
+  .method rid=145 L580 OnAddLight
+  .method rid=146 L594 OnNewDust
+  .method rid=147 L605 OnGoreUpdate
+  .method rid=148 L614 OnRainUpdate
+  .method rid=149 L623 OnDrawRain
+  .method rid=150 L639 OnDoUpdateAutoSave
+  .method rid=151 L670 RunAutoSave
+  .method rid=152 L687 OnSectionTileFrameWithCheck
+  .method rid=153 L698 BossActive
+  .method rid=154 L727 ModifyInterfaceLayers
+  .method rid=155 L749 DrawPreloadBanner
+  .method rid=156 L787 DrawOverlay
+  .method rid=157 L831 DrawBorder
+  .method rid=158 L840 DrawStat
+  .method rid=159 L848 BuildOverlayLines
+  .method rid=160 L889 Row
+  .method rid=161 L903 FrameBudgetMs
+  .method rid=162 L909 FpsColor
+  .method rid=163 L921 FrameColor
+  .method rid=164 L935 DrawGraph
+  .method rid=165 LNone .ctor
+  .method rid=166 L34 .cctor
+  .method rid=167 L80 <Load>b__30_0
+  .method rid=168 L81 <Load>b__30_1
+  .method rid=169 L85 <Load>b__30_2
+  .method rid=170 L87 <Load>b__30_3
+
+===== TYPE [13] EngineOptimizer.Perf.SmoothCursorSystem : Terraria.ModLoader.ModSystem  (sealed public)  [файл: Perf/SmoothCursorSystem.cs] 
+  .field private static const int TextureSize = 128 
+  .field private static const float Pad = 12.0 
+  .field private static const double MinRefreshMs = 50.0 
+  .field private static EngineOptimizer.EngineOptimizer _mod 
+  .field private static Microsoft.Xna.Framework.Graphics.RenderTarget2D _target 
+  .field private static Microsoft.Xna.Framework.Color[] _pixels 
+  .field private static Microsoft.Xna.Framework.Graphics.RenderTargetBinding[] _bindings 
+  .field private static Microsoft.Xna.Framework.Graphics.Viewport _savedViewport 
+  .field private static IntPtr _cursor 
+  .field private static int _hotX 
+  .field private static int _hotY 
+  .field private static ulong _pixelHash 
+  .field private static ulong _signature 
+  .field private static long _lastRefresh 
+  .field private static int _interfaceOverride 
+  .field private static int _interfaceOverrideFrame 
+  .field private static int _frame 
+  .field private static bool _rendering 
+  .field private static bool _active 
+  .field private static bool _failed 
+  .field private static int _failures 
+  .field private static long _retryAt 
+  .field private static long _lastErrorLog 
+  .method rid=171 L76 get_Active
+  .method rid=172 L79 get_Status
+  .method rid=173 L83 Load
+  .method rid=174 L94 Unload
+  .method rid=175 L113 OnWorldLoad
+  .method rid=176 L123 OnDoUpdate
+  .method rid=177 L134 OnDraw
+  .method rid=178 L155 OnDrawCursor
+  .method rid=179 L164 OnDrawThickCursor
+  .method rid=180 L173 OnDrawInterfaceCursor
+  .method rid=181 L188 Update
+  .method rid=182 L286 ShouldRun
+  .method rid=183 L319 ComputeSignature
+  .method rid=184 L351 Mix
+  .method rid=185 L359 Quantize
+  .method rid=186 L369 RenderCursor
+  .method rid=187 L431 DrawThickCursor
+  .method rid=188 L458 DrawColoredCursor
+  .method rid=189 L478 DrawCursorOverride
+  .method rid=190 L516 EnsureTarget
+  .method rid=191 L531 HasVisiblePixel
+  .method rid=192 L549 LooksOpaque
+  .method rid=193 L563 HashPixels
+  .method rid=194 L575 CreateCursor
+  .method rid=195 L611 Deactivate
+  .method rid=196 L649 DisposeTarget
+  .method rid=197 L666 Fail
+  .method rid=198 LNone .ctor
+  .method rid=199 L57 .cctor
+
+===== TYPE [14] EngineOptimizer.Perf.Telemetry : System.Object  (abstract sealed)  [файл: Perf/Telemetry.cs] 
+  .field private static const int WindowSize = 600 
+  .field private static const int SpikeLiveCount = 10 
+  .field private static const int SpikeBufferLimit = 5000 
+  .field private static const double SpikeThresholdMs = 25.0 
+  .field private static const double FrameIgnoreMs = 500.0 
+  .field private static readonly double[] Window 
+  .field private static readonly double[] WindowCopy 
+  .field private static int _windowCount 
+  .field private static int _windowHead 
+  .field private static readonly System.Collections.Generic.List`1<Spike> Spikes 
+  .field private static readonly System.Collections.Generic.List`1<string> SpikeCsv 
+  .field private static readonly System.Collections.Generic.List`1<long> SpikeTimes 
+  .field private static readonly System.Collections.Generic.List`1<string> SpikeCauses 
+  .field private static long _lastWriteTs 
+  .field private static long _lastTimelineTs 
+  .field private static long _sessionStartTs 
+  .field private static string _dir 
+  .field private static System.Diagnostics.Process _proc 
+  .field private static System.TimeSpan _lastProcCpu 
+  .field private static long _lastProcSampleTs 
+  .field public static double ProcessCpuPct 
+  .field public static int ThreadCount 
+  .field private static readonly System.Globalization.CultureInfo Inv 
+  .field private static readonly System.Text.Encoding Utf8 
+  .field private static const string SpikeHeader = 'time,frame_ms,cpu_update,cpu_draw,light,tiles_walls,bg,dust_ms,proj_ms,npc_ms,it' 
+  .field private static const string TimelineHeader = 'time,fps_draw,fps_game,ups,frame_avg,frame_p95,frame_max,cpu_update,cpu_draw,lig' 
+  .method rid=200 L65 Reset
+  .method rid=201 L94 get_Dir
+  .method rid=202 L103 Rotate
+  .method rid=203 L131 TrimArchives
+  .method rid=204 L149 Flush
+  .method rid=205 L154 WriteSession
+  .method rid=206 L208 RecordFrame
+  .method rid=207 L218 RecordFrameCore
+  .method rid=208 L265 AddSpike
+  .method rid=209 L333 SampleProcess
+  .method rid=210 L364 WriteLive
+  .method rid=211 L496 FlushSpikes
+  .method rid=212 L513 AppendTimeline
+  .method rid=213 L576 ToCsv
+  .method rid=214 L628 ClassifySpike
+  .method rid=215 L685 get_SpikesLastMinute
+  .method rid=216 L688 get_PreloadSpikesLastMinute
+  .method rid=217 L692 CountSpikesLastMinute
+  .method rid=218 L709 AvgWindow
+  .method rid=219 L722 MaxWindow
+  .method rid=220 L733 PercentileWindow
+  .method rid=221 L746 ParallelState
+  .method rid=222 L760 Dominant
+  .method rid=223 L774 DominantUpdateSection
+  .method rid=224 L803 Bosses
+  .method rid=225 L829 Biome
+  .method rid=226 L861 Str
+  .method rid=227 L866 Num
+  .method rid=228 L871 Bool
+  .method rid=229 L876 F
+  .method rid=230 L884 Escape
+  .method rid=231 L902 Csv
+  .method rid=232 L30 .cctor
+
+===== TYPE [15] EngineOptimizer.Perf.WorldPreloader : System.Object  (abstract sealed public)  [файл: Perf/WorldPreloader.cs] 
+  .field public static System.Action`1<string> Log 
+  .field private static bool <Active>k__BackingField [System.Runtime.CompilerServices.CompilerGeneratedAttribute]
+  .field private static bool <Failed>k__BackingField [System.Runtime.CompilerServices.CompilerGeneratedAttribute]
+  .field private static int <Done>k__BackingField [System.Runtime.CompilerServices.CompilerGeneratedAttribute]
+  .field private static int <Total>k__BackingField [System.Runtime.CompilerServices.CompilerGeneratedAttribute]
+  .field private static double <TotalMs>k__BackingField [System.Runtime.CompilerServices.CompilerGeneratedAttribute]
+  .field private static double <MaxSectionMs>k__BackingField [System.Runtime.CompilerServices.CompilerGeneratedAttribute]
+  .field private static int <FramedSections>k__BackingField [System.Runtime.CompilerServices.CompilerGeneratedAttribute]
+  .field private static double <EffectiveBudgetMs>k__BackingField [System.Runtime.CompilerServices.CompilerGeneratedAttribute]
+  .field private static double <LastUpdateMs>k__BackingField [System.Runtime.CompilerServices.CompilerGeneratedAttribute]
+  .field private static readonly System.Collections.Generic.List`1<Section> _queue 
+  .field private static int _queueIndex 
+  .field private static long _startedAt 
+  .field private static double _wallSeconds 
+  .field private static double _baselineMs 
+  .field private static bool _sectionActive 
+  .field private static int _curX 
+  .field private static int _curY 
+  .field private static int _tileX 
+  .field private static int _tileY 
+  .field private static int _tileStartY 
+  .field private static int _tileEndX 
+  .field private static int _tileEndY 
+  .field private static int _sectionTileDone 
+  .field private static int _sectionTileTotal 
+  .field private static double _sectionMs 
+  .field private static bool _noMapUpdateSet 
+  .method rid=233 L32 get_Active
+  .method rid=234 L32 set_Active
+  .method rid=235 L35 get_Failed
+  .method rid=236 L35 set_Failed
+  .method rid=237 L38 get_Done
+  .method rid=238 L38 set_Done
+  .method rid=239 L39 get_Total
+  .method rid=240 L39 set_Total
+  .method rid=241 L44 get_Percent
+  .method rid=242 L60 get_EstimatedSecondsLeft
+  .method rid=243 L79 get_TotalMs
+  .method rid=244 L79 set_TotalMs
+  .method rid=245 L82 get_MaxSectionMs
+  .method rid=246 L82 set_MaxSectionMs
+  .method rid=247 L85 get_FramedSections
+  .method rid=248 L85 set_FramedSections
+  .method rid=249 L87 get_AverageSectionMs
+  .method rid=250 L92 get_Seconds
+  .method rid=251 L106 get_EffectiveBudgetMs
+  .method rid=252 L106 set_EffectiveBudgetMs
+  .method rid=253 L109 get_LastUpdateMs
+  .method rid=254 L109 set_LastUpdateMs
+  .method rid=255 L146 Reset
+  .method rid=256 L171 Begin
+  .method rid=257 L224 Update
+  .method rid=258 L339 AddWork
+  .method rid=259 L5 StartNextSection
+  .method rid=260 L382 Finish
+  .method rid=261 L394 ResetSectionCursor
+  .method rid=262 L409 BeginNoMapUpdate
+  .method rid=263 L416 EndNoMapUpdate
+  .method rid=264 L426 BossNearby
+  .method rid=265 L118 .cctor
+
+===== TYPE [16] <PrivateImplementationDetails> : System.Object  (sealed)  [файл: ?] [System.Runtime.CompilerServices.CompilerGeneratedAttribute]
+  .field internal static readonly long 0EB2B65A0396BC0C88A6BBAFC8F741485AB4C51A927414C9C361667A6787BC43 
+
+===== TYPE [17] Worker : System.Object  (sealed)  [файл: ?] 
+  .field public et(0x1f) Stopping 
+  .method rid=266 LNone .ctor
+
+===== TYPE [18] Pending : System.ValueType  (sealed)  [файл: ?] 
+  .field public string Path 
+  .field public string Text 
+  .field public string NewFileHeader 
+  .field public bool Atomic 
+
+===== TYPE [19] <>c__DisplayClass9_0 : System.Object  (sealed)  [файл: Perf/AsyncFileWriter.cs] [System.Runtime.CompilerServices.CompilerGeneratedAttribute]
+  .field public Worker worker 
+  .method rid=267 LNone .ctor
+  .method rid=268 L45 <Start>b__0
+
+===== TYPE [20] <>O : System.Object  (abstract sealed)  [файл: ?] [System.Runtime.CompilerServices.CompilerGeneratedAttribute]
+  .field public static ReLogic.Threading.ParallelForAction <0>__UpdateRange 
+
+===== TYPE [21] <>O : System.Object  (abstract sealed)  [файл: ?] [System.Runtime.CompilerServices.CompilerGeneratedAttribute]
+  .field public static ReLogic.Threading.ParallelForAction <0>__UpdateRange 
+
+===== TYPE [22] FrameSections : System.ValueType  (sealed)  [файл: ?] 
+  .field public double Players 
+  .field public double Npcs 
+  .field public double Gores 
+  .field public double Projectiles 
+  .field public double Items 
+  .field public double Dust 
+  .field public double Time 
+  .field public double World 
+  .field public double Invasions 
+
+===== TYPE [23] <>O : System.Object  (abstract sealed)  [файл: ?] [System.Runtime.CompilerServices.CompilerGeneratedAttribute]
+  .field public static hook_DoUpdate <0>__OnDoUpdate 
+  .field public static hook_DoDraw <1>__OnDoDraw 
+  .field public static hook_RenderTiles <2>__OnRenderTiles 
+  .field public static hook_RenderTiles2 <3>__OnRenderTiles2 
+  .field public static hook_RenderWalls <4>__OnRenderWalls 
+  .field public static hook_RenderBackground <5>__OnRenderBackground 
+  .field public static hook_DrawDust <6>__OnDrawDust 
+  .field public static hook_DrawProjectiles <7>__OnDrawProjectiles 
+  .field public static hook_DrawNPCs <8>__OnDrawNpcs 
+  .field public static hook_DrawItems <9>__OnDrawItems 
+  .field public static hook_LightTiles <10>__OnLightTiles 
+  .field public static hook_AddLight_Vector2_float_float_float <11>__OnAddLight 
+  .field public static hook_Update <12>__OnGoreUpdate 
+  .field public static hook_Update <13>__OnRainUpdate 
+  .field public static hook_DrawRain <14>__OnDrawRain 
+  .field public static hook_NewDust <15>__OnNewDust 
+  .field public static hook_DoUpdate_AutoSave <16>__OnDoUpdateAutoSave 
+  .field public static hook_SectionTileFrameWithCheck <17>__OnSectionTileFrameWithCheck 
+  .field public static Terraria.UI.GameInterfaceDrawMethod <18>__DrawOverlay 
+  .field public static Terraria.UI.GameInterfaceDrawMethod <19>__DrawPreloadBanner 
+
+===== TYPE [24] <>c : System.Object  (sealed)  [файл: Perf/ProfilerSystem.cs] [System.Runtime.CompilerServices.CompilerGeneratedAttribute]
+  .field public static readonly <>c <>9 
+  .field public static System.Predicate`1<Terraria.UI.GameInterfaceLayer> <>9__77_0 
+  .method rid=269 LNone .cctor
+  .method rid=270 LNone .ctor
+  .method rid=271 L727 <ModifyInterfaceLayers>b__77_0
+
+===== TYPE [25] <>O : System.Object  (abstract sealed)  [файл: ?] [System.Runtime.CompilerServices.CompilerGeneratedAttribute]
+  .field public static hook_Draw <0>__OnDraw 
+  .field public static hook_DoUpdate <1>__OnDoUpdate 
+  .field public static hook_DrawCursor <2>__OnDrawCursor 
+  .field public static hook_DrawThickCursor <3>__OnDrawThickCursor 
+  .field public static hook_DrawInterface_36_Cursor <4>__OnDrawInterfaceCursor 
+
+===== TYPE [26] Spike : System.Object  (sealed)  [файл: Perf/Telemetry.cs] 
+  .field public System.DateTime At 
+  .field public double FrameMs 
+  .field public string Cause 
+  .field public double UpdateMs 
+  .field public double DrawMs 
+  .field public double LightMs 
+  .field public double TilesWallsMs 
+  .field public double BackgroundMs 
+  .field public double DustMs 
+  .field public double ProjectilesMs 
+  .field public double NpcMs 
+  .field public double ItemsMs 
+  .field public double UpdNpcMs 
+  .field public double UpdProjMs 
+  .field public double UpdGoreMs 
+  .field public double UpdDustMs 
+  .field public double GoreParMs 
+  .field public int GoreParN 
+  .field public double RainParMs 
+  .field public int RainParN 
+  .field public double PreloadMs 
+  .field public double Fps 
+  .field public double Gc0 
+  .field public double Gc2 
+  .field public double GcPause 
+  .field public double AllocMb 
+  .field public int DustCount 
+  .field public int ProjectileCount 
+  .field public int NpcCount 
+  .field public int ItemCount 
+  .field public string Bosses 
+  .field public string Biome 
+  .field public float X 
+  .field public float Y 
+  .field public float Vx 
+  .field public float Vy 
+  .field public int Hp 
+  .field public int HpMax 
+  .field public bool Dead 
+  .method rid=272 L916 .ctor
+
+===== TYPE [27] <>c : System.Object  (sealed)  [файл: Perf/Telemetry.cs] [System.Runtime.CompilerServices.CompilerGeneratedAttribute]
+  .field public static readonly <>c <>9 
+  .field public static System.Comparison`1<string> <>9__30_0 
+  .method rid=273 LNone .cctor
+  .method rid=274 LNone .ctor
+  .method rid=275 L136 <TrimArchives>b__30_0
+
+===== TYPE [28] Section : System.ValueType  (sealed)  [файл: ?] 
+  .field public short X 
+  .field public short Y 
+  .field public int DistanceSq 
+
+===== TYPE [29] <>c : System.Object  (sealed)  [файл: Perf/WorldPreloader.cs] [System.Runtime.CompilerServices.CompilerGeneratedAttribute]
+  .field public static readonly <>c <>9 
+  .field public static System.Comparison`1<Section> <>9__64_0 
+  .method rid=276 LNone .cctor
+  .method rid=277 LNone .ctor
+  .method rid=278 L207 <Begin>b__64_0

@@ -1,0 +1,31 @@
+Engine Optimizer - diagnostics and engine-level patches for tModLoader.
+
+Hotkeys: F6 - overlay, F7 - emergency hardware-cursor toggle, F8 - world
+preload on/off (stops the running preload immediately, or starts it from
+where the player stands).
+
+Frame profiling: draw-to-draw FPS, frame time, update/draw split, present/other,
+lighting, tiles, walls, background, dust, projectiles, NPC and item draw time,
+per-section update timings, GC activity, allocation rate, entity counts.
+
+On-disk diagnostics: live.json (1 s snapshot, incl. per-type NPC.AI cost and
+how much update time is outside the known sections), timeline.csv (5 s rows),
+spikes.csv (every frame over 25 ms with its dominant cause: preload / save /
+GC / section / GPU / update / draw) and last-session.txt on world exit: boss
+vs calm FPS, spike causes, projectile/NPC tops, worst 20 frames and automatic
+recommendations (vsync, lighting, GPU-bound, GC, frame skip).
+
+Smoothness: SustainedLowLatency GC, whole-world tile-frame preload on entry
+(re-centers on the player after teleports, adaptive per-frame budget, works in
+single player and as a multiplayer client), autosave postponed during boss
+fights, asynchronous telemetry I/O, cached overlay.
+
+Parallelism: vanilla gore on the thread pool (visual only), telemetry on a
+background thread. Rain parallelism is experimental and off by default.
+Gameplay simulation (NPC / projectiles / tiles / liquids) is never
+parallelized - it is unsafe in Terraria.
+
+Also fills in missing mod keybind profile entries so mods that read their
+keybind on world entry cannot crash the game when it boots straight into a
+world. Optional hardware OS cursor refreshed at 20 Hz with fail-safes (empty
+render is never uploaded; system arrow is restored on exit).

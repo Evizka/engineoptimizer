@@ -1,0 +1,64 @@
+"Keybinds.Toggle Profiler.DisplayName": Mods.EngineOptimizer.Keybinds.Toggle Profiler.DisplayName
+"Keybinds.Toggle Hardware Cursor.DisplayName": Toggle hardware cursor (F7)
+"Keybinds.Toggle World Preload.DisplayName": Toggle world preload (F8)
+
+Configs: {
+	OptimizerConfig: {
+		DisplayName: Optimizer Config
+
+		ShowOverlayOnStart: {
+			Label: Show Overlay On Start
+			Tooltip: ""
+		}
+
+		SaveReportOnWorldExit: {
+			Label: Save Report On World Exit
+			Tooltip: ""
+		}
+
+		ReduceGcPauses: {
+			Label: Reduce Gc Pauses
+			Tooltip: ""
+		}
+
+		BoostProcessPriority: {
+			Label: Boost Process Priority
+			Tooltip: While in a world the process priority is raised to AboveNormal: the browser, Discord and other background apps steal CPU from the game less often. The mod cannot change the turbo boost clock (that is OS/BIOS territory), but removing contention it can. Restored to Normal after leaving the world.
+		}
+
+		DeferAutosaveDuringBoss: {
+			Label: Defer Autosave During Boss
+			Tooltip: Autosave is postponed until after the boss fight. The timer keeps counting; failsafe is 10 minutes.
+		}
+
+		BossPerfMode: {
+			Label: Boss fight perf mode (max FPS)
+			Tooltip: During a boss fight (125-tile radius) disables the most expensive visual effects: Calamity smoke (early-exit hook), heat distortion and storm effects. Everything is restored 2 seconds after the fight. Telemetry marks those frames with the boss_perf flag.
+		}
+
+		ParallelGore: {
+			Label: Parallel Gore
+			Tooltip: ""
+		}
+
+		ParallelRain: {
+			Label: Parallel Rain
+			Tooltip: ""
+		}
+
+		PreloadWorld: {
+			Label: Preload World
+			Tooltip: Recalculates the frame data of all world sections right after entering the world (single player and multiplayer client; not on a listen server or dedicated server). Removes hitches when walking into new areas. In multiplayer, sections that have not arrived from the server yet are picked up by periodic re-scans. Toggle on the fly with F8.
+		}
+
+		PreloadBudgetMs: {
+			Label: Preload Budget Ms
+			Tooltip: ""
+		}
+
+		SmoothHardwareCursor: {
+			Label: Smooth Hardware Cursor
+			Tooltip: Renders the vanilla cursor into a render target and hands it to Windows as the OS cursor. If the cursor ever disappears, press F7 - the mod instantly restores the vanilla cursor. Turn this off if you use another cursor mod.
+		}
+	}
+}

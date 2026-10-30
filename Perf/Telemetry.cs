@@ -1,0 +1,1393 @@
+using System;
+using System.Collections.Generic;
+using System.Diagnostics;
+using System.Globalization;
+using System.IO;
+using System.Text;
+using System.Threading;
+using Terraria;
+using Terraria.Localization;
+using Terraria.ModLoader;
+
+namespace EngineOptimizer.Perf;
+
+// Телеметрия: live.json (раз в секунду), timeline.csv (раз в 5 секунд),
+// spikes.csv (каждый кадр >25 мс с причиной) и session.json при входе в мир.
+// Текст собирается на игровом потоке, на диск пишет AsyncFileWriter.
+public static class Telemetry
+{
+    private const int WindowSize = 600;
+    private const int SpikeLiveCount = 10;
+    private const int SpikeBufferLimit = 5000;
+    private const double SpikeThresholdMs = 25.0;
+    private const double FrameIgnoreMs = 500.0;
+
+    private const string SpikeHeader =
+        "time,frame_ms,cpu_update,cpu_draw,light,tiles_walls,bg,dust_ms,proj_ms,npc_ms,items_ms,fps_draw,gc0_s,alloc_mb_s,dust,proj,npc,items,bosses,biome,x,y,vx,vy,hp,dead,gc2_s,gc_pause_ms_s,upd_npc,upd_proj,upd_gore,upd_dust,gore_par_ms,gore_par_n,rain_par_ms,rain_par_n,preload_ms,cause,unacc_ms,proj_top,npc_top";
+
+    private const string TimelineHeader =
+        "time,fps_draw,fps_game,ups,frame_avg,frame_p95,frame_max,cpu_update,cpu_draw,light,tiles_walls,bg,dust_ms,proj_ms,npc_ms,items_ms,gc0_s,alloc_mb_s,dust,proj,npc,items,bosses,biome,x,y,gc2_s,gc_pause_ms_s,upd_players,upd_npcs,upd_gores,upd_proj,upd_items,upd_dust,upd_time,upd_world,upd_inv,gore_par_ms,gore_par_n,rain_par_ms,rain_par_n,proc_cpu_pct,threads,section_ms,section_n,preload_pct,cursor_ms,preload_ms,boss_perf,proj_top,npc_top";
+
+    private static readonly double[] Window = new double[WindowSize];
+    private static readonly double[] WindowCopy = new double[WindowSize];
+    private static int _windowCount;
+    private static int _windowHead;
+
+    private static readonly List<Spike> Spikes = new List<Spike>(64);
+    private static readonly List<string> SpikeCsv = new List<string>(256);
+    private static readonly List<long> SpikeTimes = new List<long>(64);
+    private static readonly List<string> SpikeCauses = new List<string>(64);
+
+    private static long _lastWriteTs;
+    private static long _lastTimelineTs;
+    private static long _sessionStartTs;
+
+    // ---- накопители сессии (для last-session.txt, v0.8.9) ----
+    // Считаются между Reset (вход в мир) и WriteSummary (выход из мира):
+    // по ним мод сам отвечает «от чего лагало» без ручного разбора CSV.
+    private static DateTime _sessionStartDt;
+    private sealed class CauseStat { public int Count; public double Sum; public double Max; }
+    private static readonly Dictionary<string, CauseStat> _causeStats = new Dictionary<string, CauseStat>(8);
+    private static readonly Dictionary<string, int> _projTopCounts = new Dictionary<string, int>(16);
+    private static readonly Dictionary<string, int> _npcTopCounts = new Dictionary<string, int>(16);
+    private static readonly List<Spike> _worst = new List<Spike>(24);
+    private const int WorstLimit = 20;
+    private const int TopCap = 64;
+
+    private static int _statFpsN;
+    private static double _statFpsSum, _statFrameSum, _statUpdSum, _statDrawSum;
+    private static int _fightN;
+    private static double _fightFpsSum, _fightFrameSum;
+    private static int _calmN;
+    private static double _calmFpsSum, _calmFrameSum;
+    private static double _gc0Sum, _gc2Sum, _gcPauseSum, _allocSum;
+    private static double _lightSum, _unaccSum; // v0.8.10: средние light/unacc
+    private static string _cursorStatus = "";   // v0.8.10: статус курсора в мире
+
+    private static string _dir;
+    private static Process _proc;
+    private static TimeSpan _lastProcCpu;
+    private static long _lastProcSampleTs;
+
+    public static double ProcessCpuPct;
+    public static int ThreadCount;
+    public static string ProcessPriority = "";
+
+    private static readonly CultureInfo Inv = CultureInfo.InvariantCulture;
+    private static readonly Encoding Utf8 = new UTF8Encoding(false);
+
+    // Один спайк — кадр дольше 25 мс со всем контекстом.
+    private sealed class Spike
+    {
+        public DateTime At;
+        public double FrameMs;
+        public string Cause = "other";
+        public double UpdateMs;
+        public double DrawMs;
+        public double LightMs;
+        public double TilesWallsMs;
+        public double BackgroundMs;
+        public double DustMs;
+        public double ProjectilesMs;
+        public double NpcMs;
+        public double ItemsMs;
+        public double UpdNpcMs;
+        public double UpdProjMs;
+        public double UpdGoreMs;
+        public double UpdDustMs;
+        public double GoreParMs;
+        public int GoreParN;
+        public double RainParMs;
+        public int RainParN;
+        public double PreloadMs;
+        public double Fps;
+        public double Gc0;
+        public double Gc2;
+        public double GcPause;
+        public double AllocMb;
+        public int DustCount;
+        public int ProjectileCount;
+        public int NpcCount;
+        public int ItemCount;
+        public string ProjTop;
+        public string NpcTop;
+        public string Bosses;
+        public string Biome;
+        public float X;
+        public float Y;
+        public float Vx;
+        public float Vy;
+        public int Hp;
+        public int HpMax;
+        public bool Dead;
+    }
+
+    public static void Reset()
+    {
+        _windowCount = 0;
+        _windowHead = 0;
+        Array.Clear(Window, 0, Window.Length);
+        Spikes.Clear();
+        SpikeCsv.Clear();
+        SpikeTimes.Clear();
+        SpikeCauses.Clear();
+        _causeStats.Clear();
+        _projTopCounts.Clear();
+        _npcTopCounts.Clear();
+        _worst.Clear();
+        _statFpsN = 0;
+        _statFpsSum = _statFrameSum = _statUpdSum = _statDrawSum = 0.0;
+        _fightN = 0;
+        _fightFpsSum = _fightFrameSum = 0.0;
+        _calmN = 0;
+        _calmFpsSum = _calmFrameSum = 0.0;
+        _gc0Sum = _gc2Sum = _gcPauseSum = _allocSum = 0.0;
+        _lightSum = _unaccSum = 0.0;
+        _cursorStatus = "";
+        NpcAiProfiler.ResetSession();
+        _sessionStartDt = DateTime.Now;
+        _lastWriteTs = 0;
+        _lastTimelineTs = 0;
+        _sessionStartTs = PerfData.Now;
+        _lastProcCpu = default;
+        _lastProcSampleTs = 0;
+        ProcessCpuPct = 0;
+        ProcessPriority = "";
+        ThreadCount = 0;
+
+        try
+        {
+            AsyncFileWriter.Start();
+            AsyncFileWriter.Flush(1000);
+            Directory.CreateDirectory(Dir);
+        }
+        catch
+        {
+        }
+
+        Rotate("timeline");
+        Rotate("spikes");
+    }
+
+    private static string Dir =>
+        _dir ??= Path.Combine(Main.SavePath, "EngineOptimizer");
+
+    // Архивируем старый csv под именем с датой.
+    private static void Rotate(string name)
+    {
+        try
+        {
+            string path = Path.Combine(Dir, name + ".csv");
+            if (!File.Exists(path))
+                return;
+
+            if (new FileInfo(path).Length == 0)
+            {
+                File.Delete(path);
+                return;
+            }
+
+            string stamp = DateTime.Now.ToString("yyyyMMdd-HHmmss", Inv);
+            string dest = Path.Combine(Dir, name + "-" + stamp + ".csv");
+
+            int suffix = 1;
+            while (File.Exists(dest))
+                dest = Path.Combine(Dir, name + "-" + stamp + "-" + suffix++ + ".csv");
+
+            File.Move(path, dest);
+            TrimArchives(name);
+        }
+        catch
+        {
+        }
+    }
+
+    // Храним только последние 8 архивов каждого вида.
+    private static void TrimArchives(string name)
+    {
+        try
+        {
+            var files = Directory.GetFiles(Dir, name + "-*.csv");
+            if (files.Length <= 8)
+                return;
+
+            Array.Sort(files, (a, b) => File.GetLastWriteTimeUtc(a).CompareTo(File.GetLastWriteTimeUtc(b)));
+
+            for (int i = 0; i < files.Length - 8; i++)
+                File.Delete(files[i]);
+        }
+        catch
+        {
+        }
+    }
+
+    public static void Flush(int timeoutMs) =>
+        AsyncFileWriter.Flush(timeoutMs);
+
+    // v0.8.9: итоговый файл сессии last-session.txt — «от чего лагало»,
+    // одним текстом. Пишется при выходе из мира; приложение его в чат
+    // (или файл от tools/send-report.ps1) — и по нему правится мод.
+    public static void WriteSummary()
+    {
+        try
+        {
+            double minutes = (PerfData.Now - _sessionStartTs) / (double)Stopwatch.Frequency / 60.0;
+
+            var sb = new StringBuilder(4096);
+            sb.AppendLine("=== EngineOptimizer — автоматическая сводка сессии ===");
+            sb.AppendLine("Файл создан модом при выходе из мира. Приложите его в чат с");
+            sb.AppendLine("ассистентом (или запустите tools/send-report.ps1 — он соберёт больше)");
+            sb.AppendLine("— по этим данным правится следующая версия мода.");
+            sb.AppendLine();
+            sb.AppendLine("started: " + _sessionStartDt.ToString("yyyy-MM-dd HH:mm:ss", Inv));
+            sb.AppendLine("duration_min: " + minutes.ToString("0.0", Inv));
+            sb.AppendLine("world: " + Main.worldName);
+            sb.AppendLine("net_mode: " + (Main.netMode == 0 ? "single" : Main.netMode == 1 ? "client" : "server"));
+            // v0.8.10: каким был курсор в мире (hw = аппаратный, vanilla =
+            // ванильный, failed = сбой, off = выключен клавишей/конфигом).
+            sb.AppendLine("cursor_state: " + _cursorStatus);
+            sb.AppendLine();
+
+            sb.AppendLine("--- Кадр в среднем ---");
+            if (_statFpsN > 0)
+            {
+                sb.AppendLine("fps_avg: " + (_statFpsSum / _statFpsN).ToString("0.0", Inv)
+                    + "  frame_ms: " + (_statFrameSum / _statFpsN).ToString("0.0", Inv)
+                    + "  update_ms: " + (_statUpdSum / _statFpsN).ToString("0.00", Inv)
+                    + "  draw_ms: " + (_statDrawSum / _statFpsN).ToString("0.00", Inv));
+                sb.AppendLine("gc: gen0 " + (_gc0Sum / _statFpsN).ToString("0.0", Inv)
+                    + "/s  gen2 " + (_gc2Sum / _statFpsN).ToString("0.00", Inv)
+                    + "/s  pause " + (_gcPauseSum / _statFpsN).ToString("0.0", Inv)
+                    + " ms/s  alloc " + (_allocSum / _statFpsN).ToString("0.0", Inv) + " MB/s");
+            }
+            else
+            {
+                sb.AppendLine("(в мире не были)");
+            }
+
+            if (_fightN > 0)
+                sb.AppendLine("БОЙ: " + _fightN + " s  fps_avg " + (_fightFpsSum / _fightN).ToString("0.0", Inv)
+                    + "  frame_ms " + (_fightFrameSum / _fightN).ToString("0.0", Inv));
+            if (_calmN > 0)
+                sb.AppendLine("вне боя: " + _calmN + " s  fps_avg " + (_calmFpsSum / _calmN).ToString("0.0", Inv)
+                    + "  frame_ms " + (_calmFrameSum / _calmN).ToString("0.0", Inv));
+            sb.AppendLine("boss_perf: " + (BossPerfMode.AnyHook ? "hooks " + BossPerfMode.HookSummary() : "no hooks"));
+            sb.AppendLine();
+
+            sb.AppendLine("--- Спайки (кадры > 25 мс): от чего лагало ---");
+            int total = 0;
+            foreach (var kv in _causeStats)
+                total += kv.Value.Count;
+            sb.AppendLine("total: " + total);
+            var causes = new List<KeyValuePair<string, CauseStat>>(_causeStats);
+            causes.Sort((a, b) => b.Value.Count.CompareTo(a.Value.Count));
+            foreach (var kv in causes)
+            {
+                var cs = kv.Value;
+                sb.AppendLine("  " + kv.Key + ": " + cs.Count
+                    + "  avg " + (cs.Sum / cs.Count).ToString("0.0", Inv)
+                    + "  max " + cs.Max.ToString("0.0", Inv) + " ms");
+            }
+            sb.AppendLine();
+
+            AppendTop(sb, "projectile_top (кто плодит снаряды):", _projTopCounts);
+            AppendTop(sb, "npc_top (кто плодит NPC):", _npcTopCounts);
+
+            // v0.8.11: кто ест время NPC-апдейта за сессию (по типам).
+            var aiTop = NpcAiProfiler.SessionTop(5);
+            if (aiTop.Count > 0)
+            {
+                sb.AppendLine("--- npc_ai_top (кто ест время NPC-апдейта) ---");
+                foreach (string line in aiTop)
+                    sb.AppendLine(line);
+                sb.AppendLine();
+            }
+
+            sb.AppendLine("--- Худшие кадры сессии (топ " + _worst.Count + ") ---");
+            foreach (var s in _worst)
+            {
+                sb.AppendLine("  " + s.At.ToString("HH:mm:ss", Inv)
+                    + "  " + s.FrameMs.ToString("0.0", Inv) + " ms"
+                    + "  cause=" + s.Cause
+                    + "  upd=" + s.UpdateMs.ToString("0.0", Inv)
+                    + "  draw=" + s.DrawMs.ToString("0.0", Inv)
+                    + "  proj=" + s.ProjectileCount
+                    + "  npc=" + s.NpcCount
+                    + (string.IsNullOrEmpty(s.Bosses) ? "" : "  bosses=" + s.Bosses)
+                    + (string.IsNullOrEmpty(s.ProjTop) ? "" : "  proj_top=" + s.ProjTop)
+                    + (string.IsNullOrEmpty(s.NpcTop) ? "" : "  npc_top=" + s.NpcTop));
+            }
+
+            AppendRecommendations(sb);
+
+            // Перезапись (Atomic), а не Append: иначе сводки сессий
+            // накопились бы в одном файле.
+            AsyncFileWriter.WriteAtomic(Path.Combine(Dir, "last-session.txt"), sb.ToString());
+        }
+        catch
+        {
+        }
+    }
+
+    // v0.8.10: короткие советы по итогам сессии — только по измеренным
+    // цифрам (средние 1 Гц-сэмплов), без гаданий. Названия настроек игры
+    // соответствуют меню «Видео/Графика».
+    private static void AppendRecommendations(StringBuilder sb)
+    {
+        if (_statFpsN < 10)
+            return;
+
+        double n = _statFpsN;
+        double fpsAvg = _statFpsSum / n;
+        double lightAvg = _lightSum / n;
+        double unaccAvg = _unaccSum / n;
+        double updAvg = _statUpdSum / n;
+        double drawAvg = _statDrawSum / n;
+        double allocAvg = _allocSum / n;
+        double gcPauseAvg = _gcPauseSum / n;
+
+        var tips = new List<string>();
+
+        try
+        {
+            bool vsync = Main.graphics != null && Main.graphics.SynchronizeWithVerticalRetrace;
+            if (vsync && (Math.Abs(fpsAvg - 60.0) < 3.0 || Math.Abs(fpsAvg - 120.0) < 5.0 || Math.Abs(fpsAvg - 144.0) < 6.0))
+                tips.Add("vsync включен, а средний FPS упирается ровно в частоту монитора ("
+                    + fpsAvg.ToString("0", Inv) + ") — для большего FPS выключите vsync в настройках видео");
+            else if (vsync && fpsAvg >= 50.0)
+                tips.Add("vsync включен, средний FPS " + fpsAvg.ToString("0", Inv)
+                    + " — это практически потолок монитора; ровная картинка, но выжать больше без выключения vsync не получится");
+            else if (vsync && fpsAvg < 55.0)
+                tips.Add("vsync включен: при просадках он добавляет рывки — попробуйте выключить в настройках видео");
+        }
+        catch
+        {
+        }
+
+        if (lightAvg > 2.0)
+            tips.Add("освещение стоит ~" + lightAvg.ToString("0.0", Inv) + " мс/кадр — переключите режим освещения "
+                + "(Color/Retro/White/Trippy) в настройках видео и сравните FPS; в настройках tModLoader включите multi-core lighting");
+
+        if (unaccAvg > 6.0 && updAvg + drawAvg < 12.0)
+            tips.Add("update+draw низкие, но кадр всё равно долог (~" + unaccAvg.ToString("0.0", Inv)
+                + " мс вне их) — игра ждёт GPU: снизьте разрешение/качество, отключите фоновые обои и освещение окружения");
+
+        if (allocAvg > 400.0 || gcPauseAvg > 40.0)
+            tips.Add("много аллокаций (" + allocAvg.ToString("0", Inv) + " MB/s) и GC-пауз (" + gcPauseAvg.ToString("0", Inv)
+                + " мс/с) — обычно это тяжёлый мод; помогает большой стек потока: tools/setup-highperf.ps1 -PatchStackSize");
+
+        if (fpsAvg < 40.0)
+            tips.Add("средний FPS " + fpsAvg.ToString("0", Inv) + " — попробуйте frame skip Subtle/On в настройках видео "
+                + "(меньше рывков при просадках) и выключите запись игр Windows (GameDVR): tools/setup-highperf.ps1");
+
+        if (tips.Count == 0)
+            return;
+
+        sb.AppendLine();
+        sb.AppendLine("--- Рекомендации (авто, по средним за сессию) ---");
+        foreach (string tip in tips)
+            sb.AppendLine("  - " + tip);
+    }
+
+    private static void AppendTop(StringBuilder sb, string title, Dictionary<string, int> counts)
+    {
+        if (counts.Count == 0)
+            return;
+
+        sb.AppendLine("--- " + title + " ---");
+        var list = new List<KeyValuePair<string, int>>(counts);
+        list.Sort((a, b) => b.Value.CompareTo(a.Value));
+        int limit = Math.Min(10, list.Count);
+        for (int i = 0; i < limit; i++)
+            sb.AppendLine("  [" + list[i].Value + "x] " + list[i].Key);
+        sb.AppendLine();
+    }
+
+    // session.json: окружение, настройки мода, список модов.
+    public static void WriteSession()
+    {
+        try
+        {
+            Directory.CreateDirectory(Dir);
+
+            var player = Main.LocalPlayer;
+            var sb = new StringBuilder(2048);
+            sb.Append('{');
+            Str(sb, "started", DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss", Inv));
+            Str(sb, "terraria", Main.versionNumber);
+            Str(sb, "tmodloader", typeof(ModLoader).Assembly.GetName().Version?.ToString() ?? "?");
+            Str(sb, "runtime", Environment.Version.ToString());
+            Num(sb, "cores", Environment.ProcessorCount);
+            Bool(sb, "gc_server", System.Runtime.GCSettings.IsServerGC);
+            Str(sb, "gc_latency", System.Runtime.GCSettings.LatencyMode.ToString());
+            Num(sb, "gc_heap_mb", GC.GetTotalMemory(false) / 1048576.0);
+            Bool(sb, "reduce_gc_pauses", OptimizerConfig.Instance?.ReduceGcPauses == true);
+            Bool(sb, "defer_autosave_boss", OptimizerConfig.Instance?.DeferAutosaveDuringBoss == true);
+            Bool(sb, "parallel_gore", OptimizerConfig.Instance?.ParallelGore == true);
+            Bool(sb, "parallel_rain", OptimizerConfig.Instance?.ParallelRain == true);
+            Bool(sb, "preload_world", OptimizerConfig.Instance?.PreloadWorld == true);
+            Num(sb, "preload_budget_ms", OptimizerConfig.Instance?.PreloadBudgetMs ?? 0);
+            Bool(sb, "smooth_cursor", OptimizerConfig.Instance?.SmoothHardwareCursor == true);
+            Str(sb, "world", Main.worldName);
+            Str(sb, "player", player != null ? player.name ?? "?" : null);
+            Num(sb, "screen_width", Main.screenWidth);
+            Num(sb, "screen_height", Main.screenHeight);
+            Bool(sb, "vsync", Main.graphics != null && Main.graphics.SynchronizeWithVerticalRetrace);
+            Bool(sb, "fixed_timestep", Main.instance != null && Main.instance.IsFixedTimeStep);
+            Str(sb, "frame_skip", Main.FrameSkipMode.ToString());
+            Str(sb, "lighting", Lighting.Mode.ToString());
+            Num(sb, "world_surface", Main.worldSurface);
+            Num(sb, "rock_layer", Main.rockLayer);
+
+            sb.Append("\"mods\":[");
+            var mods = ModLoader.Mods;
+            for (int i = 0; i < mods.Length; i++)
+            {
+                if (i > 0)
+                    sb.Append(',');
+                sb.Append('"')
+                  .Append(Escape(mods[i].Name + " " + mods[i].Version?.ToString()))
+                  .Append('"');
+            }
+            sb.Append(']').Append('}');
+
+            File.WriteAllText(Path.Combine(Dir, "session.json"), sb.ToString(), Utf8);
+        }
+        catch
+        {
+        }
+    }
+
+    public static void RecordFrame(double frameMs, double updateCpu, double drawCpu, double light,
+        double tilesWalls, double background, double dust, double projectiles, double npcs, double items)
+    {
+        try
+        {
+            RecordFrameCore(frameMs, updateCpu, drawCpu, light, tilesWalls, background, dust, projectiles, npcs, items);
+        }
+        catch
+        {
+        }
+    }
+
+    private static void RecordFrameCore(double frameMs, double updateCpu, double drawCpu, double light,
+        double tilesWalls, double background, double dust, double projectiles, double npcs, double items)
+    {
+        if (frameMs <= 0.0 || frameMs > FrameIgnoreMs)
+            return;
+
+        Window[_windowHead] = frameMs;
+        _windowHead = (_windowHead + 1) % WindowSize;
+        if (_windowCount < WindowSize)
+            _windowCount++;
+
+        if (frameMs > SpikeThresholdMs)
+            AddSpike(frameMs, updateCpu, drawCpu, light, tilesWalls, background, dust, projectiles, npcs, items);
+
+        long now = PerfData.Now;
+        if (_lastWriteTs == 0)
+        {
+            _lastWriteTs = now;
+            _lastTimelineTs = now;
+            return;
+        }
+
+        if ((now - _lastWriteTs) / (double)Stopwatch.Frequency < 1.0)
+            return;
+
+        _lastWriteTs = now;
+        WriteLive();
+        FlushSpikes();
+
+        if ((now - _lastTimelineTs) / (double)Stopwatch.Frequency >= 5.0)
+        {
+            _lastTimelineTs = now;
+            AppendTimeline();
+        }
+    }
+
+    private static void AddSpike(double frameMs, double updateCpu, double drawCpu, double light,
+        double tilesWalls, double background, double dust, double projectiles, double npcs, double items)
+    {
+        var player = Main.LocalPlayer;
+
+        var spike = new Spike
+        {
+            At = DateTime.Now,
+            FrameMs = frameMs,
+            UpdateMs = updateCpu,
+            DrawMs = drawCpu,
+            LightMs = light,
+            TilesWallsMs = tilesWalls,
+            BackgroundMs = background,
+            DustMs = dust,
+            ProjectilesMs = projectiles,
+            NpcMs = npcs,
+            ItemsMs = items,
+            PreloadMs = PerfData.PreloadMsThisFrame,
+            Cause = ClassifySpike(frameMs, updateCpu, drawCpu),
+            UpdNpcMs = PerfData.LastSections.Npcs,
+            UpdProjMs = PerfData.LastSections.Projectiles,
+            UpdGoreMs = PerfData.LastSections.Gores,
+            UpdDustMs = PerfData.LastSections.Dust,
+            GoreParMs = PerfData.GoreParallelMs,
+            GoreParN = PerfData.GoreParallelCount,
+            RainParMs = PerfData.RainParallelMs,
+            RainParN = PerfData.RainParallelCount,
+            Fps = PerfData.DrawHz,
+            Gc0 = PerfData.Gc0PerSecond,
+            Gc2 = PerfData.Gc2PerSecond,
+            GcPause = PerfData.GcPauseMsPerSecond,
+            AllocMb = PerfData.AllocMbPerSecond,
+            DustCount = PerfData.DustCount,
+            ProjectileCount = PerfData.ProjectileCount,
+            NpcCount = PerfData.NpcCount,
+            ItemCount = PerfData.ItemCount,
+            ProjTop = ProjectileTop(100),
+            NpcTop = NpcTop(25),
+            Bosses = Bosses(),
+            Biome = player != null ? Biome(player) : "?",
+            X = player != null ? player.Center.X / 16f : 0f,
+            Y = player != null ? player.Center.Y / 16f : 0f,
+            Vx = player != null ? player.velocity.X : 0f,
+            Vy = player != null ? player.velocity.Y : 0f,
+            Hp = player != null ? player.statLife : 0,
+            HpMax = player != null ? player.statLifeMax2 : 0,
+            Dead = player != null && player.dead
+        };
+
+        Spikes.Add(spike);
+        if (Spikes.Count > 256)
+            Spikes.RemoveAt(0);
+
+        // v0.8.9: копим итоги сессии для last-session.txt.
+        if (_causeStats.TryGetValue(spike.Cause, out var stat))
+        {
+            stat.Count++;
+            stat.Sum += frameMs;
+            if (frameMs > stat.Max)
+                stat.Max = frameMs;
+        }
+        else
+        {
+            _causeStats[spike.Cause] = new CauseStat { Count = 1, Sum = frameMs, Max = frameMs };
+        }
+
+        if (!string.IsNullOrEmpty(spike.ProjTop) && _projTopCounts.Count < TopCap)
+            _projTopCounts[spike.ProjTop] = _projTopCounts.TryGetValue(spike.ProjTop, out int pc) ? pc + 1 : 1;
+
+        if (!string.IsNullOrEmpty(spike.NpcTop) && _npcTopCounts.Count < TopCap)
+            _npcTopCounts[spike.NpcTop] = _npcTopCounts.TryGetValue(spike.NpcTop, out int nc) ? nc + 1 : 1;
+
+        if (_worst.Count < WorstLimit)
+        {
+            _worst.Add(spike);
+            _worst.Sort((a, b) => b.FrameMs.CompareTo(a.FrameMs));
+        }
+        else if (frameMs > _worst[_worst.Count - 1].FrameMs)
+        {
+            _worst[_worst.Count - 1] = spike;
+            _worst.Sort((a, b) => b.FrameMs.CompareTo(a.FrameMs));
+        }
+
+        SpikeTimes.Add(PerfData.Now);
+        SpikeCauses.Add(spike.Cause);
+
+        if (SpikeTimes.Count > 512)
+        {
+            SpikeTimes.RemoveRange(0, SpikeTimes.Count - 512);
+            SpikeCauses.RemoveRange(0, SpikeCauses.Count - 512);
+        }
+
+        if (SpikeCsv.Count < SpikeBufferLimit)
+            SpikeCsv.Add(ToCsv(spike));
+    }
+
+    private static void SampleProcess()
+    {
+        try
+        {
+            if (_proc == null)
+                _proc = Process.GetCurrentProcess();
+
+            // v0.8.5: приоритет процесса (см. ProfilerSystem.ApplyProcessPriority)
+            try
+            {
+                ProcessPriority = _proc.PriorityClass.ToString();
+            }
+            catch
+            {
+            }
+
+            var cpu = _proc.TotalProcessorTime;
+            long now = PerfData.Now;
+
+            if (_lastProcSampleTs != 0)
+            {
+                double wall = (now - _lastProcSampleTs) / (double)Stopwatch.Frequency;
+                if (wall > 0.2)
+                {
+                    double pct = (cpu - _lastProcCpu).TotalSeconds / wall * 100.0;
+                    if (pct < 0.0)
+                        pct = 0.0;
+
+                    ProcessCpuPct = ProcessCpuPct > 0.0
+                        ? ProcessCpuPct * 0.7 + pct * 0.3
+                        : pct;
+
+                    _lastProcCpu = cpu;
+                    _lastProcSampleTs = now;
+                    ThreadCount = _proc.Threads.Count;
+                }
+            }
+        }
+        catch
+        {
+        }
+    }
+
+    private static void WriteLive()
+    {
+        if (_sessionStartTs == 0)
+            _sessionStartTs = PerfData.Now;
+
+        double avg = AvgWindow();
+        double p95 = PercentileWindow(0.95);
+        double max = MaxWindow();
+        var player = Main.LocalPlayer;
+        int spikesLastMinute = SpikesLastMinute;
+        int preloadSpikesLastMinute = PreloadSpikesLastMinute;
+
+        SampleProcess();
+
+        // v0.8.9: 1 Гц-сэмплы для итога сессии (не каждый кадр — дёшево).
+        if (!Main.gameMenu)
+        {
+            _statFpsN++;
+            _statFpsSum += PerfData.SmoothedFps;
+            _statFrameSum += PerfData.FrameMs;
+            _statUpdSum += PerfData.UpdateMs;
+            _statDrawSum += PerfData.DrawMs;
+            _gc0Sum += PerfData.Gc0PerSecond;
+            _gc2Sum += PerfData.Gc2PerSecond;
+            _gcPauseSum += PerfData.GcPauseMsPerSecond;
+            _allocSum += PerfData.AllocMbPerSecond;
+            // v0.8.10: для авто-рекомендаций в конце сессии.
+            _lightSum += PerfData.LightingMs;
+            _unaccSum += PerfData.UnaccountedMs;
+            _cursorStatus = SmoothCursorSystem.Status;
+
+            if (BossPerfMode.Active)
+            {
+                _fightN++;
+                _fightFpsSum += PerfData.SmoothedFps;
+                _fightFrameSum += PerfData.FrameMs;
+            }
+            else
+            {
+                _calmN++;
+                _calmFpsSum += PerfData.SmoothedFps;
+                _calmFrameSum += PerfData.FrameMs;
+            }
+        }
+
+        var sb = new StringBuilder(2048);
+        sb.Append('{');
+        Str(sb, "ts", DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss", Inv));
+        Num(sb, "session_seconds", (PerfData.Now - _sessionStartTs) / (double)Stopwatch.Frequency);
+        Bool(sb, "in_world", !Main.gameMenu);
+        Num(sb, "fps_draw", PerfData.SmoothedFps);
+        Num(sb, "fps_draw_ema", PerfData.DrawHz);
+        Num(sb, "fps_game", PerfData.GameFps);
+        Num(sb, "ups", PerfData.UpdateHz);
+        Num(sb, "frame_ms", PerfData.FrameMs);
+        Num(sb, "frame_avg_ms", avg);
+        Num(sb, "frame_p95_ms", p95);
+        Num(sb, "frame_max_ms", max);
+        Num(sb, "cpu_update_ms", PerfData.UpdateMs);
+        Num(sb, "cpu_draw_ms", PerfData.DrawMs);
+        Num(sb, "cursor_ms", PerfData.CursorMs);
+        Str(sb, "cursor_state", SmoothCursorSystem.Status);
+        Bool(sb, "boss_perf", BossPerfMode.Active);
+        Bool(sb, "boss_perf_smoke_hook", BossPerfMode.SmokeHooked);
+        Bool(sb, "boss_perf_tile_hooks", BossPerfMode.TileHooksInstalled > 0);
+        Num(sb, "unacc_ms", PerfData.UnaccountedMs);
+        Num(sb, "light_ms", PerfData.LightingMs);
+        Num(sb, "tiles_walls_ms", PerfData.TilesMs + PerfData.WallsMs);
+        Num(sb, "background_ms", PerfData.BackgroundMs);
+        Num(sb, "dust_ms", PerfData.DustMs);
+        Num(sb, "projectiles_ms", PerfData.ProjectilesMs);
+        Num(sb, "npc_ms", PerfData.NpcsMs);
+        Num(sb, "items_ms", PerfData.ItemsMs);
+        Num(sb, "upd_players_ms", PerfData.UpdPlayersMs);
+        Num(sb, "upd_npcs_ms", PerfData.UpdNpcsMs);
+        Num(sb, "upd_gores_ms", PerfData.UpdGoresMs);
+        Num(sb, "upd_projectiles_ms", PerfData.UpdProjectilesMs);
+        Num(sb, "upd_items_ms", PerfData.UpdItemsMs);
+        Num(sb, "upd_dust_ms", PerfData.UpdDustMs);
+        Num(sb, "upd_time_ms", PerfData.UpdTimeMs);
+        Num(sb, "upd_world_ms", PerfData.UpdWorldMs);
+        Num(sb, "upd_invasions_ms", PerfData.UpdInvasionsMs);
+        // v0.8.11: сколько update осталось за пределами известных секций
+        // (в отчёте v0.8.9 при ходьбе cpu_update 15-22 мс, а секции ~7-10).
+        Num(sb, "upd_other_ms", Math.Max(0, PerfData.UpdateMs
+            - (PerfData.UpdPlayersMs + PerfData.UpdNpcsMs + PerfData.UpdGoresMs
+                + PerfData.UpdProjectilesMs + PerfData.UpdItemsMs + PerfData.UpdDustMs
+                + PerfData.UpdTimeMs + PerfData.UpdWorldMs + PerfData.UpdInvasionsMs)));
+        // v0.8.11: кто ест NPC.AI в последнем кадре (тип, мс, вызовы).
+        Num(sb, "npc_ai_ms", NpcAiProfiler.FrameMs);
+        Str(sb, "npc_ai_top", NpcAiProfiler.FrameTop);
+        Num(sb, "gore_par_ms", PerfData.GoreParallelMs);
+        Num(sb, "gore_par_n", PerfData.GoreParallelCount);
+        Num(sb, "rain_par_ms", PerfData.RainParallelMs);
+        Num(sb, "rain_par_n", PerfData.RainParallelCount);
+        Num(sb, "gore_par_total", PerfData.GoreParallelTotal);
+        Num(sb, "rain_par_total", PerfData.RainParallelTotal);
+        Str(sb, "parallel_state", ParallelState());
+        Num(sb, "gc0_per_s", PerfData.Gc0PerSecond);
+        Num(sb, "gc2_per_s", PerfData.Gc2PerSecond);
+        Num(sb, "gc_pause_ms_per_s", PerfData.GcPauseMsPerSecond);
+        Num(sb, "alloc_mb_per_s", PerfData.AllocMbPerSecond);
+        Num(sb, "process_cpu_pct", ProcessCpuPct);
+        Num(sb, "threads", ThreadCount);
+        Str(sb, "proc_priority", ProcessPriority);
+        Num(sb, "section_ms", PerfData.SectionMs);
+        Num(sb, "section_n", PerfData.SectionCount);
+        Num(sb, "preload_pct", WorldPreloader.Percent);
+        Num(sb, "preload_budget_ms", WorldPreloader.EffectiveBudgetMs);
+        Num(sb, "preload_ms", WorldPreloader.LastUpdateMs);
+        Bool(sb, "preload_active", WorldPreloader.Active);
+        Num(sb, "dust", PerfData.DustCount);
+        Num(sb, "projectiles", PerfData.ProjectileCount);
+        if (PerfData.ProjectileCount >= 100)
+            Str(sb, "projectile_top", ProjectileTop(100));
+        Num(sb, "npcs", PerfData.NpcCount);
+        if (PerfData.NpcCount >= 25)
+            Str(sb, "npc_top", NpcTop(25));
+        Num(sb, "items", PerfData.ItemCount);
+        Num(sb, "spikes_last_60s", spikesLastMinute);
+        Num(sb, "preload_spikes_last_60s", preloadSpikesLastMinute);
+        Num(sb, "save_ms", PerfData.SaveMs);
+        Num(sb, "save_count", PerfData.SaveCount);
+        Num(sb, "autosave_deferred", PerfData.AutosaveDeferrals);
+        Num(sb, "dropped_writes", AsyncFileWriter.Dropped);
+        Num(sb, "failed_writes", AsyncFileWriter.Failed);
+        Str(sb, "gc_latency", System.Runtime.GCSettings.LatencyMode.ToString());
+        Str(sb, "world", Main.worldName);
+        Str(sb, "bosses", Bosses());
+        Str(sb, "dominant", Dominant());
+
+        sb.Append("\"player\":{");
+        if (player != null)
+        {
+            sb.Append("\"name\":\"").Append(Escape(player.name)).Append("\",");
+            sb.Append("\"x\":").Append(F(player.Center.X / 16f)).Append(',');
+            sb.Append("\"y\":").Append(F(player.Center.Y / 16f)).Append(',');
+            sb.Append("\"vx\":").Append(F(player.velocity.X)).Append(',');
+            sb.Append("\"vy\":").Append(F(player.velocity.Y)).Append(',');
+            sb.Append("\"hp\":").Append(player.statLife.ToString(Inv)).Append(',');
+            sb.Append("\"hpmax\":").Append(player.statLifeMax2.ToString(Inv)).Append(',');
+            sb.Append("\"dead\":").Append(player.dead ? "true" : "false").Append(',');
+            sb.Append("\"biome\":\"").Append(Escape(Biome(player))).Append('"');
+        }
+        else
+        {
+            sb.Append("\"name\":\"?\"");
+        }
+        sb.Append('}');
+
+        sb.Append(",\"last_spikes\":[");
+        int start = Math.Max(0, Spikes.Count - SpikeLiveCount);
+        for (int i = start; i < Spikes.Count; i++)
+        {
+            if (i > start)
+                sb.Append(',');
+
+            var s = Spikes[i];
+            sb.Append('{');
+            Str(sb, "cause", s.Cause ?? "other");
+            Num(sb, "frame_ms", s.FrameMs);
+            Num(sb, "unacc_ms", Math.Max(0.0, s.FrameMs - s.UpdateMs - s.DrawMs));
+            Num(sb, "update_ms", s.UpdateMs);
+            Num(sb, "draw_ms", s.DrawMs);
+            Num(sb, "light_ms", s.LightMs);
+            Num(sb, "npcs", s.NpcCount);
+            Num(sb, "projectiles", s.ProjectileCount);
+            Num(sb, "gc_pause_ms_s", s.GcPause);
+            Num(sb, "upd_npc", s.UpdNpcMs);
+            Num(sb, "upd_proj", s.UpdProjMs);
+            Num(sb, "gore_par_ms", s.GoreParMs);
+            Num(sb, "preload_ms", s.PreloadMs);
+            Str(sb, "bosses", s.Bosses);
+            sb.Append("\"at\":\"").Append(s.At.ToString("yyyy-MM-dd HH:mm:ss", Inv)).Append("\"}");
+        }
+        sb.Append(']').Append('}');
+
+        AsyncFileWriter.WriteAtomic(Path.Combine(Dir, "live.json"), sb.ToString());
+    }
+
+    private static void FlushSpikes()
+    {
+        if (SpikeCsv.Count == 0)
+            return;
+
+        string path = Path.Combine(Dir, "spikes.csv");
+        var sb = new StringBuilder(SpikeCsv.Count * 160);
+        for (int i = 0; i < SpikeCsv.Count; i++)
+            sb.AppendLine(SpikeCsv[i]);
+
+        AsyncFileWriter.Append(path, sb.ToString(), SpikeHeader + Environment.NewLine);
+        SpikeCsv.Clear();
+    }
+
+    private static void AppendTimeline()
+    {
+        string path = Path.Combine(Dir, "timeline.csv");
+        var sb = new StringBuilder(512);
+
+        double avg = AvgWindow();
+        double p95 = PercentileWindow(0.95);
+        double max = MaxWindow();
+        var player = Main.LocalPlayer;
+
+        sb.Append(DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss", Inv)).Append(',');
+        sb.Append(F(PerfData.SmoothedFps)).Append(',');
+        sb.Append(PerfData.GameFps.ToString(Inv)).Append(',');
+        sb.Append(F(PerfData.UpdateHz)).Append(',');
+        sb.Append(F(avg)).Append(',');
+        sb.Append(F(p95)).Append(',');
+        sb.Append(F(max)).Append(',');
+        sb.Append(F(PerfData.UpdateMs)).Append(',');
+        sb.Append(F(PerfData.DrawMs)).Append(',');
+        sb.Append(F(PerfData.LightingMs)).Append(',');
+        sb.Append(F(PerfData.TilesMs + PerfData.WallsMs)).Append(',');
+        sb.Append(F(PerfData.BackgroundMs)).Append(',');
+        sb.Append(F(PerfData.DustMs)).Append(',');
+        sb.Append(F(PerfData.ProjectilesMs)).Append(',');
+        sb.Append(F(PerfData.NpcsMs)).Append(',');
+        sb.Append(F(PerfData.ItemsMs)).Append(',');
+        sb.Append(F(PerfData.Gc0PerSecond)).Append(',');
+        sb.Append(F(PerfData.AllocMbPerSecond)).Append(',');
+        sb.Append(PerfData.DustCount.ToString(Inv)).Append(',');
+        sb.Append(PerfData.ProjectileCount.ToString(Inv)).Append(',');
+        sb.Append(PerfData.NpcCount.ToString(Inv)).Append(',');
+        sb.Append(PerfData.ItemCount.ToString(Inv)).Append(',');
+        sb.Append(Csv(Bosses())).Append(',');
+        sb.Append(Csv(player != null ? Biome(player) : "?")).Append(',');
+        sb.Append(F(player != null ? player.Center.X / 16f : 0f)).Append(',');
+        sb.Append(F(player != null ? player.Center.Y / 16f : 0f)).Append(',');
+        sb.Append(F(PerfData.Gc2PerSecond)).Append(',');
+        sb.Append(F(PerfData.GcPauseMsPerSecond)).Append(',');
+        sb.Append(F(PerfData.UpdPlayersMs)).Append(',');
+        sb.Append(F(PerfData.UpdNpcsMs)).Append(',');
+        sb.Append(F(PerfData.UpdGoresMs)).Append(',');
+        sb.Append(F(PerfData.UpdProjectilesMs)).Append(',');
+        sb.Append(F(PerfData.UpdItemsMs)).Append(',');
+        sb.Append(F(PerfData.UpdDustMs)).Append(',');
+        sb.Append(F(PerfData.UpdTimeMs)).Append(',');
+        sb.Append(F(PerfData.UpdWorldMs)).Append(',');
+        sb.Append(F(PerfData.UpdInvasionsMs)).Append(',');
+        sb.Append(F(PerfData.GoreParallelMs)).Append(',');
+        sb.Append(PerfData.GoreParallelCount.ToString(Inv)).Append(',');
+        sb.Append(F(PerfData.RainParallelMs)).Append(',');
+        sb.Append(PerfData.RainParallelCount.ToString(Inv)).Append(',');
+        sb.Append(F(ProcessCpuPct)).Append(',');
+        sb.Append(ThreadCount.ToString(Inv)).Append(',');
+        sb.Append(F(PerfData.SectionMs)).Append(',');
+        sb.Append(PerfData.SectionCount.ToString(Inv)).Append(',');
+        sb.Append(F(WorldPreloader.Percent)).Append(',');
+        sb.Append(F(PerfData.CursorMs)).Append(',');
+        sb.Append(F(WorldPreloader.LastUpdateMs)).Append(',');
+        sb.Append(BossPerfMode.Active ? 1 : 0).Append(',');
+        sb.Append(Csv(ProjectileTop(100))).Append(',');
+        sb.Append(Csv(NpcTop(25)));
+
+        AsyncFileWriter.Append(path, sb.ToString() + Environment.NewLine, TimelineHeader + Environment.NewLine);
+    }
+
+    private static string ToCsv(Spike s) =>
+        string.Join(",", new[]
+        {
+            s.At.ToString("yyyy-MM-dd HH:mm:ss", Inv),
+            F(s.FrameMs),
+            F(s.UpdateMs),
+            F(s.DrawMs),
+            F(s.LightMs),
+            F(s.TilesWallsMs),
+            F(s.BackgroundMs),
+            F(s.DustMs),
+            F(s.ProjectilesMs),
+            F(s.NpcMs),
+            F(s.ItemsMs),
+            F(s.Fps),
+            F(s.Gc0),
+            F(s.AllocMb),
+            s.DustCount.ToString(Inv),
+            s.ProjectileCount.ToString(Inv),
+            s.NpcCount.ToString(Inv),
+            s.ItemCount.ToString(Inv),
+            Csv(s.Bosses),
+            Csv(s.Biome),
+            F(s.X),
+            F(s.Y),
+            F(s.Vx),
+            F(s.Vy),
+            s.Hp.ToString(Inv),
+            s.Dead ? "1" : "0",
+            F(s.Gc2),
+            F(s.GcPause),
+            F(s.UpdNpcMs),
+            F(s.UpdProjMs),
+            F(s.UpdGoreMs),
+            F(s.UpdDustMs),
+            F(s.GoreParMs),
+            s.GoreParN.ToString(Inv),
+            F(s.RainParMs),
+            s.RainParN.ToString(Inv),
+            F(s.PreloadMs),
+            s.Cause ?? "other",
+            F(Math.Max(0.0, s.FrameMs - s.UpdateMs - s.DrawMs)),
+            Csv(s.ProjTop),
+            Csv(s.NpcTop)
+        });
+
+    // Причина спайка: кто был последней миллисекундой, вытолкнувшей кадр
+    // за бюджет.
+    private static string ClassifySpike(double frameMs, double updateCpu, double drawCpu)
+    {
+        double preload = PerfData.PreloadMsThisFrame;
+        double update = Math.Max(0.0, updateCpu - preload);
+        double draw = drawCpu;
+        double wait = Math.Max(0.0, frameMs - updateCpu - drawCpu);
+
+        if (PerfData.SaveThisFrameMs >= 1.0 && PerfData.SaveThisFrameMs >= update * 0.5)
+            return "save";
+
+        // v0.8.8: значение этого кадра (раньше — EMA SectionMs: причина
+        // «section» ложно прилипала ещё ~8 кадров после пересчёта).
+        if (PerfData.SectionMsThisFrame >= 1.0 && PerfData.SectionMsThisFrame >= update * 0.5)
+            return "section";
+
+        if (PerfData.GcPauseThisFrameMs >= frameMs * 0.35)
+            return "gc";
+
+        int rate = Main.frameRate > 0 ? Main.frameRate : 60;
+        double targetMs = 1000.0 / Math.Clamp(rate, 30, 240);
+
+        double cpu = updateCpu + drawCpu;
+        double cpuWithoutPreload = cpu - preload;
+
+        // Срез предзагрузки был последней миллисекундой, вытолкнувшей кадр
+        // за бюджет: без него update+draw уложились бы.
+        if (preload >= 1.0 && cpu > targetMs - 1.0 && cpuWithoutPreload <= targetMs - 1.0)
+            return "preload";
+
+        // Кадр не упирался в процессор — ждали present/GPU.
+        if (wait >= frameMs * 0.4 && wait >= update && wait >= draw)
+            return "gpu";
+
+        if (update >= draw * 1.25)
+            return "update";
+
+        if (draw >= update * 1.25)
+            return "draw";
+
+        return "other";
+    }
+
+    public static int SpikesLastMinute => CountSpikesLastMinute(false);
+    public static int PreloadSpikesLastMinute => CountSpikesLastMinute(true);
+
+    private static int CountSpikesLastMinute(bool preload)
+    {
+        long limit = PerfData.Now - (long)(Stopwatch.Frequency * 60.0);
+        int count = 0;
+
+        for (int i = SpikeTimes.Count - 1; i >= 0; i--)
+        {
+            if (SpikeTimes[i] < limit)
+                break;
+
+            bool isPreload = i < SpikeCauses.Count && SpikeCauses[i] == "preload";
+            if (isPreload == preload)
+                count++;
+        }
+
+        return count;
+    }
+
+    private static double AvgWindow()
+    {
+        if (_windowCount == 0)
+            return 0.0;
+
+        double sum = 0;
+        for (int i = 0; i < _windowCount; i++)
+            sum += Window[i];
+        return sum / _windowCount;
+    }
+
+    private static double MaxWindow()
+    {
+        double max = 0;
+        for (int i = 0; i < _windowCount; i++)
+        {
+            if (Window[i] > max)
+                max = Window[i];
+        }
+        return max;
+    }
+
+    private static double PercentileWindow(double p)
+    {
+        if (_windowCount == 0)
+            return 0.0;
+
+        var copy = WindowCopy;
+        Array.Copy(Window, copy, _windowCount);
+        Array.Sort(copy, 0, _windowCount);
+        int index = Math.Clamp((int)(_windowCount * p), 0, _windowCount - 1);
+        return copy[index];
+    }
+
+    private static string ParallelState()
+    {
+        if (GoreParallel.Failed || RainParallel.Failed)
+            return "failed";
+
+        bool gore = GoreParallel.Enabled;
+        bool rain = RainParallel.Enabled;
+
+        if (gore && rain)
+            return "gore+rain";
+        if (gore)
+            return "gore";
+        if (rain)
+            return "rain";
+        return "off";
+    }
+
+    private static string Dominant()
+    {
+        if (PerfData.LightingMs > PerfData.DrawMs * 0.5)
+            return "lighting";
+        if (PerfData.UpdateMs > PerfData.DrawMs * 1.4)
+            return "update:" + DominantUpdateSection();
+        if (PerfData.DrawMs > PerfData.UpdateMs * 1.4)
+            return "draw";
+        return "balanced";
+    }
+
+    private static string DominantUpdateSection()
+    {
+        string name = "npc";
+        double best = PerfData.UpdNpcsMs;
+
+        if (PerfData.UpdProjectilesMs > best)
+        {
+            best = PerfData.UpdProjectilesMs;
+            name = "proj";
+        }
+        if (PerfData.UpdDustMs > best)
+        {
+            best = PerfData.UpdDustMs;
+            name = "dust";
+        }
+        if (PerfData.UpdWorldMs > best)
+        {
+            best = PerfData.UpdWorldMs;
+            name = "world";
+        }
+        if (PerfData.UpdPlayersMs > best)
+        {
+            best = PerfData.UpdPlayersMs;
+            name = "player";
+        }
+        if (PerfData.UpdGoresMs > best)
+        {
+            best = PerfData.UpdGoresMs;
+            name = "gore";
+        }
+        return name;
+    }
+
+    private static string Bosses()
+    {
+        if (Main.npc == null)
+            return "";
+
+        var names = new List<string>();
+        for (int i = 0; i < Main.npc.Length; i++)
+        {
+            var npc = Main.npc[i];
+            if (!npc.active || !npc.boss)
+                continue;
+
+            // Сегменты многочастного босса считаем один раз.
+            if (npc.realLife >= 0 && npc.realLife != npc.whoAmI)
+                continue;
+
+            names.Add(npc.FullName);
+            if (names.Count >= 6)
+                break;
+        }
+
+        return string.Join("|", names);
+    }
+
+    private static string Biome(Player player)
+    {
+        var biomes = new List<string>(3);
+
+        if (player.ZoneDungeon)
+            biomes.Add("Dungeon");
+        else if (player.ZoneUnderworldHeight)
+            biomes.Add("Underworld");
+
+        if (player.ZoneCorrupt)
+            biomes.Add("Corrupt");
+        if (player.ZoneCrimson)
+            biomes.Add("Crimson");
+        if (player.ZoneHallow)
+            biomes.Add("Hallow");
+        if (player.ZoneJungle)
+            biomes.Add("Jungle");
+        if (player.ZoneSnow)
+            biomes.Add("Snow");
+        if (player.ZoneDesert)
+            biomes.Add("Desert");
+        if (player.ZoneBeach)
+            biomes.Add("Beach");
+        if (player.ZoneGlowshroom)
+            biomes.Add("Glowshroom");
+        if (player.ZoneMeteor)
+            biomes.Add("Meteor");
+        if (player.ZoneShimmer)
+            biomes.Add("Shimmer");
+
+        if (biomes.Count == 0)
+            biomes.Add(player.ZonePurity ? "Surface" : "Purity");
+
+        if (player.ZoneRockLayerHeight)
+            biomes.Add("Caverns");
+        else if (player.ZoneDirtLayerHeight)
+            biomes.Add("Underground");
+        else if (player.ZoneSkyHeight)
+            biomes.Add("Sky");
+
+        return string.Join("|", biomes);
+    }
+
+    private static void Str(StringBuilder sb, string key, string value) =>
+        sb.Append('"').Append(key).Append("\":\"").Append(Escape(value ?? "")).Append("\",");
+
+    private static void Num(StringBuilder sb, string key, double value) =>
+        sb.Append('"').Append(key).Append("\":").Append(F(value)).Append(',');
+
+    private static void Bool(StringBuilder sb, string key, bool value) =>
+        sb.Append('"').Append(key).Append("\":").Append(value ? "true" : "false").Append(',');
+
+    private static string F(double value)
+    {
+        if (double.IsNaN(value) || double.IsInfinity(value))
+            return "0";
+        return value.ToString("0.###", Inv);
+    }
+
+    private static string Escape(string value)
+    {
+        var sb = new StringBuilder(value.Length + 8);
+        for (int i = 0; i < value.Length; i++)
+        {
+            char c = value[i];
+            switch (c)
+            {
+                case '\t':
+                    sb.Append("\\t");
+                    break;
+                case '\n':
+                    sb.Append("\\n");
+                    break;
+                case '\r':
+                    break;
+                case '"':
+                    sb.Append("\\\"");
+                    break;
+                case '\\':
+                    sb.Append("\\\\");
+                    break;
+                default:
+                    sb.Append(c < ' ' ? ' ' : c);
+                    break;
+            }
+        }
+        return sb.ToString();
+    }
+
+    private static string Csv(string value)
+    {
+        if (string.IsNullOrEmpty(value))
+            return "";
+
+        if (value.IndexOfAny(new[] { ',', '"', '\n', '\r' }) >= 0)
+            return "\"" + value.Replace("\"", "\"\"") + "\"";
+
+        return value;
+    }
+
+    // v0.8.4: когда снарядов аномально много (>= minCount, по умолчанию
+    // 100 — норма в бою заметно ниже), возвращаем топ-3 типа с количеством
+    // и именем: для модовых — «Мод:Класс», для ванильных — локализованное
+    // имя. Ровно этот разбор нужен, чтобы объяснить аномалию «213
+    // снарядов» из старых трасс: сейчас видно только общее число, но не
+    // ЧЬИ снаряды. Считается не каждый кадр, а в момент записи
+    // live.json / timeline / spike — микросекунды.
+    private static string ProjectileTop(int minCount)
+    {
+        if (PerfData.ProjectileCount < minCount)
+            return "";
+
+        try
+        {
+            var counts = new Dictionary<int, int>(16);
+            var names = new Dictionary<int, string>(16);
+
+            var projectiles = Main.projectile;
+            for (int i = 0; i < projectiles.Length; i++)
+            {
+                var p = projectiles[i];
+                if (p == null || !p.active)
+                    continue;
+
+                counts.TryGetValue(p.type, out int c);
+                counts[p.type] = c + 1;
+
+                if (!names.ContainsKey(p.type))
+                {
+                    var mp = p.ModProjectile;
+                    names[p.type] = mp != null ? mp.Mod.Name + ":" + mp.Name : "";
+                }
+            }
+
+            // топ-3 по количеству, без LINQ
+            return TopThree(counts, names, t =>
+            {
+                try
+                {
+                    return Lang.GetProjectileName(t).Value;
+                }
+                catch
+                {
+                    return null;
+                }
+            });
+        }
+        catch
+        {
+            return "";
+        }
+    }
+
+    // v0.8.7: топ-NPC — кто ест upd_npc_ms в бою (адды, призывы).
+    // Порог ниже, чем у снарядов: в боях с аддами 25+ NPC — уже норма.
+    private static string NpcTop(int minCount)
+    {
+        if (PerfData.NpcCount < minCount)
+            return "";
+
+        try
+        {
+            var counts = new Dictionary<int, int>(16);
+            var names = new Dictionary<int, string>(16);
+
+            var npcs = Main.npc;
+            for (int i = 0; i < npcs.Length; i++)
+            {
+                var n = npcs[i];
+                if (n == null || !n.active)
+                    continue;
+
+                counts.TryGetValue(n.type, out int c);
+                counts[n.type] = c + 1;
+
+                if (!names.ContainsKey(n.type))
+                {
+                    var mn = n.ModNPC;
+                    if (mn != null)
+                    {
+                        names[n.type] = mn.Mod.Name + ":" + mn.Name;
+                    }
+                    else
+                    {
+                        try
+                        {
+                            names[n.type] = n.TypeName;
+                        }
+                        catch
+                        {
+                            names[n.type] = "";
+                        }
+                    }
+                }
+            }
+
+            return TopThree(counts, names, null);
+        }
+        catch
+        {
+            return "";
+        }
+    }
+
+    private static string TopThree(Dictionary<int, int> counts, Dictionary<int, string> names, Func<int, string> fallbackName)
+    {
+        int t1 = 0, n1 = 0, t2 = 0, n2 = 0, t3 = 0, n3 = 0;
+        foreach (var kv in counts)
+        {
+            if (kv.Value > n1)
+            {
+                t3 = t2; n3 = n2; t2 = t1; n2 = n1; t1 = kv.Key; n1 = kv.Value;
+            }
+            else if (kv.Value > n2)
+            {
+                t3 = t2; n3 = n2; t2 = kv.Key; n2 = kv.Value;
+            }
+            else if (kv.Value > n3)
+            {
+                t3 = kv.Key; n3 = kv.Value;
+            }
+        }
+
+        var sb = new StringBuilder(64);
+        AppendTypeCount(sb, t1, n1, names, fallbackName);
+        if (n2 > 0)
+        {
+            if (sb.Length > 0) sb.Append("; ");
+            AppendTypeCount(sb, t2, n2, names, fallbackName);
+        }
+        if (n3 > 0)
+        {
+            if (sb.Length > 0) sb.Append("; ");
+            AppendTypeCount(sb, t3, n3, names, fallbackName);
+        }
+
+        return sb.ToString();
+    }
+
+    private static void AppendTypeCount(StringBuilder sb, int type, int count, Dictionary<int, string> names, Func<int, string> fallbackName)
+    {
+        if (count == 0)
+            return;
+
+        sb.Append("type ").Append(type.ToString(Inv));
+
+        string name;
+        if (!names.TryGetValue(type, out name) || string.IsNullOrEmpty(name))
+            name = fallbackName != null ? fallbackName(type) : null;
+
+        if (!string.IsNullOrEmpty(name))
+            sb.Append(" '").Append(name).Append('\'');
+
+        sb.Append(" x").Append(count.ToString(Inv));
+    }
+}

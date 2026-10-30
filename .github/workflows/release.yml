@@ -1,0 +1,50 @@
+name: release
+
+# Заливает готовый EngineOptimizer.tmod из ветки ci-build в GitHub Release
+# (создаёт релиз, если его ещё нет). Прямой upload ассетов из песочницы
+# блокируется хостом uploads.github.com, а раннеру доступен весь интернет.
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Тег релиза (например, v0.8.8)'
+        required: true
+        default: 'v0.8.8'
+
+permissions:
+  contents: write
+
+jobs:
+  attach:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Attach .tmod to release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -uo pipefail
+          TAG="${{ inputs.tag || github.ref_name }}"
+          REPO="${GITHUB_REPOSITORY}"
+          echo "Релиз: $TAG"
+
+          step() { if out=$(eval "$1" 2>&1); then echo "[ok] $2"; else echo "::error::$2: $(echo "$out" | tr '\n' ' ' | head -c 300)"; exit 1; fi }
+
+          step "git clone --quiet --depth 1 --branch ci-build https://github.com/${REPO}.git /tmp/ci" "clone-ci-build"
+          step "ls /tmp/ci/*.tmod" "tmod-exists"
+          step "cp /tmp/ci/EngineOptimizer.tmod ." "copy"
+
+          NOTES="Сборка на tModLoader 2026.08.3.0 (stable).
+          Установка: .tmod положить в %USERPROFILE%\\Documents\\My Games\\Terraria\\tModLoader\\Mods\\ и включить в игре.
+          Изменения — в README.md и в истории коммитов; свежие сборки — ветка ci-build и артефакты Actions."
+
+          # -R: без checkout раннер не в git-репозитории, gh сам репо не найдёт
+          if gh release view "$TAG" -R "$REPO" >/dev/null 2>&1; then
+            step "gh release upload '$TAG' EngineOptimizer.tmod --clobber -R '$REPO'" "upload-existing"
+          else
+            step "gh release create '$TAG' EngineOptimizer.tmod -R '$REPO' --title 'EngineOptimizer $TAG' --notes \"\$NOTES\"" "create-with-asset"
+          fi
+          echo "Готово: ассет залит в $TAG"

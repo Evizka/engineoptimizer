@@ -1,0 +1,11 @@
+# Сборка
+bin/
+obj/
+*.tmod
+*.user
+.vs/
+.idea/
+
+# Локальные файлы игрока (попали сюда из рабочей папки tModLoader)
+enabled.json
+BTitles_shown.dat
