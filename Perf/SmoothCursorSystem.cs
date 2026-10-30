@@ -22,7 +22,11 @@ public sealed class SmoothCursorSystem : ModSystem
 {
     private const int TextureSize = 128;
     private const float Pad = 12f;
-    private const double MinRefreshMs = 50.0;
+    // v1.2: было 50 мс — до 20 перерисовок/с. Каждая перерисовка = рендер
+    // в target + чтение GPU->CPU (стал конвейера) + новый SDL-курсор:
+    // отсюда секундные лаги и мерцание. 250 мс достаточно: курсор почти
+    // статичен (меняются только цвет при наведении и override).
+    private const double MinRefreshMs = 250.0;
 
     private static EngineOptimizer _mod;
 
@@ -54,6 +58,15 @@ public sealed class SmoothCursorSystem : ModSystem
     // в меню не попасть; клавиша возвращает ванильный курсор немедленно.
     public static bool UserDisabled;
 
+    // v1.2: конфликт курсорных модов (BossCursor и т.п.) — аппаратный курсор
+    // принудительно выключен: чужие подмены курсора заставляют наш рендер
+    // перерисовываться каждый кадр (мерцание, чёрный куб, лаги).
+    public static string ConflictReason;
+    private static bool _conflictAnnounced;
+    private static bool _offAnnounced;
+    private static int _recreateCount;
+    private static long _recreateWindowStart;
+
     static SmoothCursorSystem()
     {
         _pixelHash = ulong.MaxValue;
@@ -72,6 +85,8 @@ public sealed class SmoothCursorSystem : ModSystem
         {
             if (Main.dedServ)
                 return "-";
+            if (ConflictReason != null)
+                return "conflict";
             if (UserDisabled)
                 return "off";
             if (_failed)
@@ -87,6 +102,18 @@ public sealed class SmoothCursorSystem : ModSystem
     public override void Load()
     {
         _mod = Mod as EngineOptimizer;
+
+        // v1.2: моды, подменяющие курсор, ломают аппаратный курсор
+        // (перерисовка каждый кадр -> мерцание/чёрный куб/лаги).
+        ConflictReason = null;
+        try
+        {
+            if (ModLoader.HasMod("BossCursor"))
+                ConflictReason = "BossCursor";
+        }
+        catch
+        {
+        }
 
         On_Main.Draw += OnDraw;
         On_Main.DoUpdate += OnDoUpdate;
@@ -111,6 +138,10 @@ public sealed class SmoothCursorSystem : ModSystem
         _failures = 0;
         _retryAt = 0;
         _lastErrorLog = 0;
+        _conflictAnnounced = false;
+        _offAnnounced = false;
+        _recreateCount = 0;
+        _recreateWindowStart = 0;
     }
 
     public override void OnWorldLoad()
@@ -259,6 +290,22 @@ public sealed class SmoothCursorSystem : ModSystem
             if (created == IntPtr.Zero)
             {
                 Fail("SDL could not create the cursor: " + SDL.SDL_GetError(), null);
+                return;
+            }
+
+            // v1.2: если картинка курсора меняется слишком часто (чужой мод
+            // подменяет курсор каждый кадр) — это мерцание и лишние лаги:
+            // выключаемся насовсем, дальше ванильный курсор.
+            long nowTicks = PerfData.Now;
+            if (nowTicks - _recreateWindowStart > Stopwatch.Frequency * 10)
+            {
+                _recreateWindowStart = nowTicks;
+                _recreateCount = 0;
+            }
+            if (++_recreateCount > 6)
+            {
+                SDL.SDL_FreeCursor(created);
+                Fail("cursor image changes too often (a cursor mod is fighting for the cursor)", null);
                 return;
             }
 
@@ -524,6 +571,15 @@ public sealed class SmoothCursorSystem : ModSystem
         var handle = default(GCHandle);
         IntPtr surface = IntPtr.Zero;
 
+        // v1.2: чёрный куб вокруг курсора на части драйверов Windows:
+        // пиксели с A=0, но RGB!=0 (остатки блендинга SpriteBatch) некоторые
+        // драйверы рисуют как непрозрачный чёрный. Зануляем их.
+        for (int i = 0; i < pixels.Length; i++)
+        {
+            if (pixels[i].A == 0)
+                pixels[i] = default(Color);
+        }
+
         handle = GCHandle.Alloc(pixels, GCHandleType.Pinned);
         try
         {
@@ -559,6 +615,9 @@ public sealed class SmoothCursorSystem : ModSystem
 
     private static bool ConfigEnabled()
     {
+        if (ConflictReason != null)
+            return false;
+
         try
         {
             return RuntimeConfig.SmoothHardwareCursor; // v1.1: пресет
@@ -566,6 +625,23 @@ public sealed class SmoothCursorSystem : ModSystem
         catch
         {
             return false;
+        }
+    }
+
+    // v1.2: однократное сообщение о конфликте (вызывается при входе в мир).
+    public static void AnnounceConflictOnce()
+    {
+        if (ConflictReason == null || _conflictAnnounced || Main.dedServ)
+            return;
+
+        _conflictAnnounced = true;
+        _mod?.Logger.Warn("Hardware cursor is off: conflicting mod detected (" + ConflictReason + "). Vanilla cursor is used.");
+        try
+        {
+            Main.NewText("Engine Optimizer: hardware cursor OFF - " + ConflictReason + " detected (cursor mod conflict)", 255, 140, 60);
+        }
+        catch
+        {
         }
     }
 
@@ -655,7 +731,21 @@ public sealed class SmoothCursorSystem : ModSystem
             _lastErrorLog = now;
             string suffix = exception != null ? " " + exception.GetType().Name + ": " + exception.Message : "";
             if (finalFailure)
+            {
                 _mod?.Logger.Warn("Smooth cursor disabled after repeated errors, using the vanilla cursor. " + message + suffix);
+                if (!_offAnnounced)
+                {
+                    _offAnnounced = true;
+                    try
+                    {
+                        if (!Main.dedServ)
+                            Main.NewText("Engine Optimizer: hardware cursor disabled (" + message + "), vanilla cursor in use", 255, 140, 60);
+                    }
+                    catch
+                    {
+                    }
+                }
+            }
             else
                 _mod?.Logger.Warn("Smooth cursor error (will retry). " + message + suffix);
         }

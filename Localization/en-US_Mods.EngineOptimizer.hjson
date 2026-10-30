@@ -67,7 +67,7 @@ Configs: {
 
 		SmoothHardwareCursor: {
 			Label: Smooth Hardware Cursor
-			Tooltip: Renders the vanilla cursor into a render target and hands it to Windows as the OS cursor. If the cursor ever disappears, press F7 - the mod instantly restores the vanilla cursor. Turn this off if you use another cursor mod.
+			Tooltip: OFF by default (since v1.2): on some systems the driver shows a black cube and flicker, and cursor mods (BossCursor etc.) conflict - the mod detects the conflict and force-disables the hardware cursor. If enabled: the vanilla cursor is rendered into a render target and handed to Windows as the OS cursor; on any failure the mod restores the normal cursor (or press F7).
 		}
 	}
 }

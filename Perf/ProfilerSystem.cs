@@ -183,6 +183,9 @@ public sealed class ProfilerSystem : ModSystem
 
         RuntimeConfig.SetPreset(OptimizerConfig.Instance?.Preset ?? OptimizerPreset.Balanced);
 
+        // v1.2: если найден курсорный мод-конфликт — сказать один раз.
+        SmoothCursorSystem.AnnounceConflictOnce();
+
         if (RuntimeConfig.PreloadWorld && !WorldPreloader.UserDisabled)
             WorldPreloader.Begin();
 

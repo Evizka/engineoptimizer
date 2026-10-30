@@ -41,8 +41,12 @@ public sealed class OptimizerConfig : ModConfig
     [Range(0, 30)]
     public int PreloadBudgetMs { get; set; } = 3;
 
-    [DefaultValue(true)]
-    public bool SmoothHardwareCursor { get; set; } = true;
+    // v1.2: по умолчанию выключен — на части систем (драйверы Windows,
+    // конфликт с курсорными модами) аппаратный курсор мерцает чёрным
+    // кубом и даёт лаги. Включайте осознанно; конфликтующие моды мод
+    // определит сам и выключит его принудительно.
+    [DefaultValue(false)]
+    public bool SmoothHardwareCursor { get; set; } = false;
 
     [DefaultValue(true)]
     public bool BossPerfMode { get; set; } = true;
