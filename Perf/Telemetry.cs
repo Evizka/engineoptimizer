@@ -62,7 +62,6 @@ public static class Telemetry
     private static double _calmFpsSum, _calmFrameSum;
     private static double _gc0Sum, _gc2Sum, _gcPauseSum, _allocSum;
     private static double _lightSum, _unaccSum; // v0.8.10: средние light/unacc
-    private static string _cursorStatus = "";   // v0.8.10: статус курсора в мире
 
     private static string _dir;
     private static Process _proc;
@@ -143,7 +142,6 @@ public static class Telemetry
         _calmFpsSum = _calmFrameSum = 0.0;
         _gc0Sum = _gc2Sum = _gcPauseSum = _allocSum = 0.0;
         _lightSum = _unaccSum = 0.0;
-        _cursorStatus = "";
         NpcAiProfiler.ResetSession();
         _sessionStartDt = DateTime.Now;
         _lastWriteTs = 0;
@@ -245,7 +243,6 @@ public static class Telemetry
             sb.AppendLine("net_mode: " + (Main.netMode == 0 ? "single" : Main.netMode == 1 ? "client" : "server"));
             // v0.8.10: каким был курсор в мире (hw = аппаратный, vanilla =
             // ванильный, failed = сбой, off = выключен клавишей/конфигом).
-            sb.AppendLine("cursor_state: " + _cursorStatus);
             sb.AppendLine();
 
             sb.AppendLine("--- Кадр в среднем ---");
@@ -429,7 +426,6 @@ public static class Telemetry
             Bool(sb, "parallel_rain", RuntimeConfig.ParallelRain);
             Bool(sb, "preload_world", RuntimeConfig.PreloadWorld);
             Num(sb, "preload_budget_ms", RuntimeConfig.PreloadBudgetMs);
-            Bool(sb, "smooth_cursor", RuntimeConfig.SmoothHardwareCursor);
             Str(sb, "world", Main.worldName);
             Str(sb, "player", player != null ? player.name ?? "?" : null);
             Num(sb, "screen_width", Main.screenWidth);
@@ -677,7 +673,6 @@ public static class Telemetry
             // v0.8.10: для авто-рекомендаций в конце сессии.
             _lightSum += PerfData.LightingMs;
             _unaccSum += PerfData.UnaccountedMs;
-            _cursorStatus = SmoothCursorSystem.Status;
 
             if (BossPerfMode.Active)
             {
@@ -708,8 +703,7 @@ public static class Telemetry
         Num(sb, "frame_max_ms", max);
         Num(sb, "cpu_update_ms", PerfData.UpdateMs);
         Num(sb, "cpu_draw_ms", PerfData.DrawMs);
-        Num(sb, "cursor_ms", PerfData.CursorMs);
-        Str(sb, "cursor_state", SmoothCursorSystem.Status);
+        Num(sb, "cursor_ms", PerfData.CursorMs); // v1.3: всегда 0 — курсор мод не трогает
         Bool(sb, "boss_perf", BossPerfMode.Active);
         Bool(sb, "boss_perf_smoke_hook", BossPerfMode.SmokeHooked);
         Bool(sb, "boss_perf_tile_hooks", BossPerfMode.TileHooksInstalled > 0);

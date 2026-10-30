@@ -27,10 +27,6 @@ parallelized - it is unsafe in Terraria.
 
 Also fills in missing mod keybind profile entries so mods that read their
 keybind on world entry cannot crash the game when it boots straight into a
-world. Cursor safety: a failsafe cursor (always on) draws the cursor itself
-whenever nobody else drew one this frame, so the cursor can never fully
-disappear (cursor mods like BossCursor or a stuck gamepad mode are the usual
-culprits - a chat message names it). Optional hardware OS cursor (OFF by
-default since 1.2: some drivers show a black cube / flicker; the mod detects
-cursor-mod conflicts and force-disables it; empty renders are never uploaded,
-flicker auto-disables).
+world. The mod does not touch the mouse cursor at all (the cursor subsystem
+was removed in 1.3 after it caused flicker/disappearing cursors on some
+setups; if your cursor disappears, that is another mod - BossCursor etc.).
