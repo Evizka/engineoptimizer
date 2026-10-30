@@ -18,12 +18,10 @@ namespace EngineOptimizer.Perf;
 public sealed class ProfilerSystem : ModSystem
 {
     private const string ToggleKeyName = "Toggle Profiler";
-    private const string CursorKeyName = "Toggle Hardware Cursor";
     private const string PreloadKeyName = "Toggle World Preload";
     private const string PresetKeyName = "Cycle Preset";
 
     public static ModKeybind ToggleKey;
-    public static ModKeybind CursorKey;
     public static ModKeybind PreloadKey;
     public static ModKeybind PresetKey;
 
@@ -84,7 +82,6 @@ public sealed class ProfilerSystem : ModSystem
     public override void Load()
     {
         ToggleKey = KeybindLoader.RegisterKeybind(Mod, ToggleKeyName, "F6");
-        CursorKey = KeybindLoader.RegisterKeybind(Mod, CursorKeyName, "F7");
         PreloadKey = KeybindLoader.RegisterKeybind(Mod, PreloadKeyName, "F8");
         PresetKey = KeybindLoader.RegisterKeybind(Mod, PresetKeyName, "F9");
 
@@ -158,7 +155,6 @@ public sealed class ProfilerSystem : ModSystem
 
         Settings = null;
         ToggleKey = null;
-        CursorKey = null;
         PreloadKey = null;
         PresetKey = null;
         _overlayBuiltAt = 0;
@@ -182,9 +178,6 @@ public sealed class ProfilerSystem : ModSystem
         Telemetry.WriteSession();
 
         RuntimeConfig.SetPreset(OptimizerConfig.Instance?.Preset ?? OptimizerPreset.Balanced);
-
-        // v1.2: если найден курсорный мод-конфликт — сказать один раз.
-        SmoothCursorSystem.AnnounceConflictOnce();
 
         if (RuntimeConfig.PreloadWorld && !WorldPreloader.UserDisabled)
         {
@@ -244,24 +237,6 @@ public sealed class ProfilerSystem : ModSystem
             PerfData.Visible = !PerfData.Visible;
             if (!Main.gameMenu && !Main.dedServ)
                 Main.NewText(PerfData.Visible ? "Engine Optimizer: overlay ON" : "Engine Optimizer: overlay OFF", 150, 220, 130);
-        }
-
-        // v0.8.10: аварийный выключатель аппаратного курсора (F7). Если
-        // курсор пропал (пустая картинка/конфликт модов) — мышь в меню
-        // не работает; клавиша мгновенно возвращает ванильный курсор.
-        if (CursorKey != null && CursorKey.JustPressed)
-        {
-            SmoothCursorSystem.UserDisabled = !SmoothCursorSystem.UserDisabled;
-            if (SmoothCursorSystem.UserDisabled)
-            {
-                SmoothCursorSystem.Disable();
-                if (!Main.dedServ)
-                    Main.NewText("Engine Optimizer: hardware cursor OFF (vanilla) - F7 to re-enable", 255, 140, 60);
-            }
-            else if (!Main.dedServ)
-            {
-                Main.NewText("Engine Optimizer: hardware cursor ON", 150, 220, 130);
-            }
         }
 
         // v1.0: вкл/выкл предзагрузки мира на лету (F8). OFF останавливает
@@ -980,10 +955,9 @@ public sealed class ProfilerSystem : ModSystem
         Row(4, "alloc", $"{PerfData.AllocMbPerSecond:0.0} MB/s", Color.Gainsboro, true);
         Row(5, "light / tiles", $"{PerfData.LightingMs:0.00} / {PerfData.TilesMs:0.00}", Color.Gainsboro, true);
         Row(6, "walls / bg", $"{PerfData.WallsMs:0.00} / {PerfData.BackgroundMs:0.00}", Color.Gainsboro, true);
-        // v0.8.10: статус курсора, а не только миллисекунды — по нему
-        // видно, жив ли аппаратный курсор (hw / vanilla / failed / off).
-        Row(7, "cursor", $"{SmoothCursorSystem.Status}  {PerfData.CursorMs:0.00} ms",
-            SmoothCursorSystem.Failed ? Color.OrangeRed : Color.Gainsboro, true);
+        // v1.3: курсорную строку заменил NPC.AI — курсор мод больше
+        // не трогает вообще (подсистема вырезана).
+        Row(7, "npc ai", $"{NpcAiProfiler.FrameMs:0.00} ms", Color.Gainsboro, true);
 
         int spikes = Telemetry.SpikesLastMinute;
         int preloadSpikes = Telemetry.PreloadSpikesLastMinute;

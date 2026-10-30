@@ -41,18 +41,6 @@ public sealed class OptimizerConfig : ModConfig
     [Range(0, 30)]
     public int PreloadBudgetMs { get; set; } = 3;
 
-    // v1.2: по умолчанию выключен — на части систем (драйверы Windows,
-    // конфликт с курсорными модами) аппаратный курсор мерцает чёрным
-    // кубом и даёт лаги. Включайте осознанно; конфликтующие моды мод
-    // определит сам и выключит его принудительно.
-    [DefaultValue(false)]
-    public bool SmoothHardwareCursor { get; set; } = false;
-
-    // v1.2.2: страховочный курсор — если за кадр никто не нарисовал курсор
-    // (другой мод спрятал, залип геймпад), мод рисует его сам.
-    [DefaultValue(true)]
-    public bool FailsafeCursor { get; set; } = true;
-
     [DefaultValue(true)]
     public bool BossPerfMode { get; set; } = true;
 
