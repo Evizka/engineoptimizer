@@ -69,5 +69,10 @@ Configs: {
 			Label: Smooth Hardware Cursor
 			Tooltip: OFF by default (since v1.2): on some systems the driver shows a black cube and flicker, and cursor mods (BossCursor etc.) conflict - the mod detects the conflict and force-disables the hardware cursor. If enabled: the vanilla cursor is rendered into a render target and handed to Windows as the OS cursor; on any failure the mod restores the normal cursor (or press F7).
 		}
+		FailsafeCursor: {
+			Label: Failsafe cursor
+			Tooltip: If nobody drew a cursor this frame (another mod hid it, or gamepad mode got stuck) - the mod draws the cursor itself so it never disappears completely. Works in every preset. A chat message tells you the rescue is active.
+		}
+
 	}
 }

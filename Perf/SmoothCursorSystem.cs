@@ -67,6 +67,15 @@ public sealed class SmoothCursorSystem : ModSystem
     private static int _recreateCount;
     private static long _recreateWindowStart;
 
+    // v1.2.2: страховочный курсор — если за кадр НИКТО не нарисовал курсор
+    // (BossCursor спрятал, залип режим геймпада, сбой другого мода),
+    // мод рисует курсор сам. Гарантия: курсор не исчезает никогда.
+    private static int _cursorDrawnFrame = -1;
+    private static int _failsafeDrawnFrame = -1;
+    private static bool _failsafeAnnounced;
+    // v1.2.2: возвращаем только то, что сами поменяли.
+    private static bool _setMouseVisibleByUs;
+
     static SmoothCursorSystem()
     {
         _pixelHash = ulong.MaxValue;
@@ -95,6 +104,9 @@ public sealed class SmoothCursorSystem : ModSystem
                 return "off";
             if (Main.gameMenu)
                 return "menu";
+            // v1.2.2: мод спасает курсор — видно в оверлее и телеметрии.
+            if (_failsafeDrawnFrame == _frame)
+                return "failsafe";
             return _active ? "hw" : "vanilla";
         }
     }
@@ -142,10 +154,17 @@ public sealed class SmoothCursorSystem : ModSystem
         _offAnnounced = false;
         _recreateCount = 0;
         _recreateWindowStart = 0;
+        _cursorDrawnFrame = -1;
+        _failsafeDrawnFrame = -1;
+        _failsafeAnnounced = false;
+        _setMouseVisibleByUs = false;
     }
 
     public override void OnWorldLoad()
     {
+        // v1.2.2: в новом мире сообщение о страховке — заново, если повторится.
+        _failsafeAnnounced = false;
+
         // После смены мира даём плавному курсору шанс даже после сбоев.
         if (!_failed && _failures > 0)
         {
@@ -159,7 +178,10 @@ public sealed class SmoothCursorSystem : ModSystem
         orig(self, ref gameTime);
 
         if (_active && Main.instance != null && !Main.instance.IsMouseVisible)
+        {
             Main.instance.IsMouseVisible = true;
+            _setMouseVisibleByUs = true;
+        }
     }
 
     private static void OnDraw(On_Main.orig_Draw orig, Main self, GameTime gameTime)
@@ -184,6 +206,73 @@ public sealed class SmoothCursorSystem : ModSystem
         }
 
         orig(self, gameTime);
+
+        // v1.2.2: страховочный курсор. Решение по факту кадра: если мы
+        // в игре, аппаратный курсор не активен, системный курсор скрыт
+        // и ванильная отрисовка не состоялась (её подавил другой мод) —
+        // рисуем курсор сами. Иначе курсор «полностью исчезал».
+        try
+        {
+            if (FailsafeNeeded())
+                DrawFailsafeCursor();
+        }
+        catch
+        {
+        }
+    }
+
+    private static bool FailsafeNeeded()
+    {
+        if (Main.dedServ || Main.gameMenu || _active)
+            return false;
+
+        if (_cursorDrawnFrame == _frame)
+            return false;
+
+        // Системный (OS) курсор виден — прятать нечего.
+        if (Main.instance != null && Main.instance.IsMouseVisible)
+            return false;
+
+        // Геймпад с включённым курсором геймпада — штатное скрытие мыши.
+        if (PlayerInput.UsingGamePad && PlayerInput.SettingsForUI.ShowGamepadCursor)
+            return false;
+
+        try
+        {
+            return RuntimeConfig.FailsafeCursor;
+        }
+        catch
+        {
+            return true;
+        }
+    }
+
+    private static void DrawFailsafeCursor()
+    {
+        var texture = TextureAssets.Cursor;
+        if (texture == null || texture.State != Terraria.UI.AssetState.Completed || Main.spriteBatch == null)
+            return;
+
+        _failsafeDrawnFrame = _frame;
+
+        var sb = Main.spriteBatch;
+        sb.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend);
+        float scale = Math.Max(0.8f, Main.cursorScale);
+        sb.Draw(texture.Value, Main.MouseScreen, null, Color.White * 0.95f, 0f, Vector2.Zero, scale, SpriteEffects.None, 0f);
+        sb.End();
+
+        if (!_failsafeAnnounced)
+        {
+            _failsafeAnnounced = true;
+            _mod?.Logger.Warn("Failsafe cursor active: no mod drew a cursor this frame (check BossCursor / gamepad mode).");
+            try
+            {
+                Main.NewText("Engine Optimizer: cursor was hidden by something - failsafe cursor ON (check BossCursor / gamepad)", 255, 200, 80);
+            }
+            catch
+            {
+            }
+        }
     }
 
     // Пока активен аппаратный курсор — ванильная отрисовка подавляется.
@@ -192,6 +281,7 @@ public sealed class SmoothCursorSystem : ModSystem
         if (!_active || _rendering)
             return;
 
+        _cursorDrawnFrame = _frame;
         orig(bonus, smart);
     }
 
@@ -327,7 +417,10 @@ public sealed class SmoothCursorSystem : ModSystem
         _active = true;
 
         if (Main.instance != null && !Main.instance.IsMouseVisible)
+        {
             Main.instance.IsMouseVisible = true;
+            _setMouseVisibleByUs = true;
+        }
     }
 
     private static bool ShouldRun()
@@ -683,7 +776,10 @@ public sealed class SmoothCursorSystem : ModSystem
 
         _cursor = IntPtr.Zero;
 
-        if (Main.instance != null)
+        // v1.2.2: прячем OS-курсор только если это мы его показывали
+        // (раньше безусловно: если видимость включил другой код — прятали
+        // чужое, и курсор «исчезал полностью»).
+        if (_setMouseVisibleByUs && Main.instance != null)
         {
             try
             {
@@ -692,6 +788,7 @@ public sealed class SmoothCursorSystem : ModSystem
             catch
             {
             }
+            _setMouseVisibleByUs = false;
         }
     }
 

@@ -84,6 +84,10 @@ public static class RuntimeConfig
             ? System.Math.Max(5, Cfg?.PreloadBudgetMs ?? 3)
             : Cfg?.PreloadBudgetMs ?? 3;
 
+    // v1.2.2: страховка работает во всех пресетах (это не оптимизация,
+    // а защита от исчезающего курсора).
+    public static bool FailsafeCursor => Cfg?.FailsafeCursor != false;
+
     public static bool SmoothHardwareCursor =>
         Preset == OptimizerPreset.DiagnosticsOnly ? false : Cfg?.SmoothHardwareCursor == true;
 
