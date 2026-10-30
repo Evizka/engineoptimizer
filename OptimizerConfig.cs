@@ -48,6 +48,11 @@ public sealed class OptimizerConfig : ModConfig
     [DefaultValue(false)]
     public bool SmoothHardwareCursor { get; set; } = false;
 
+    // v1.2.2: страховочный курсор — если за кадр никто не нарисовал курсор
+    // (другой мод спрятал, залип геймпад), мод рисует его сам.
+    [DefaultValue(true)]
+    public bool FailsafeCursor { get; set; } = true;
+
     [DefaultValue(true)]
     public bool BossPerfMode { get; set; } = true;
 
