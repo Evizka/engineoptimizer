@@ -22,7 +22,11 @@ public sealed class SmoothCursorSystem : ModSystem
 {
     private const int TextureSize = 128;
     private const float Pad = 12f;
-    private const double MinRefreshMs = 50.0;
+    // v1.2: было 50 мс — до 20 перерисовок/с. Каждая перерисовка = рендер
+    // в target + чтение GPU->CPU (стал конвейера) + новый SDL-курсор:
+    // отсюда секундные лаги и мерцание. 250 мс достаточно: курсор почти
+    // статичен (меняются только цвет при наведении и override).
+    private const double MinRefreshMs = 250.0;
 
     private static EngineOptimizer _mod;
 
@@ -53,6 +57,15 @@ public sealed class SmoothCursorSystem : ModSystem
     // спрятался (пустая картинка, конфликт с другим модом) — без мыши
     // в меню не попасть; клавиша возвращает ванильный курсор немедленно.
     public static bool UserDisabled;
+
+    // v1.2: конфликт курсорных модов (BossCursor и т.п.) — аппаратный курсор
+    // принудительно выключен: чужие подмены курсора заставляют наш рендер
+    // перерисовываться каждый кадр (мерцание, чёрный куб, лаги).
+    public static string ConflictReason;
+    private static bool _conflictAnnounced;
+    private static bool _offAnnounced;
+    private static int _recreateCount;
+    private static long _recreateWindowStart;
 
     static SmoothCursorSystem()
     {
@@ -89,6 +102,18 @@ public sealed class SmoothCursorSystem : ModSystem
     public override void Load()
     {
         _mod = Mod as EngineOptimizer;
+
+        // v1.2: моды, подменяющие курсор, ломают аппаратный курсор
+        // (перерисовка каждый кадр -> мерцание/чёрный куб/лаги).
+        ConflictReason = null;
+        try
+        {
+            if (ModLoader.HasMod("BossCursor"))
+                ConflictReason = "BossCursor";
+        }
+        catch
+        {
+        }
 
         On_Main.Draw += OnDraw;
         On_Main.DoUpdate += OnDoUpdate;
