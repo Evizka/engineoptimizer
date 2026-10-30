@@ -48,7 +48,7 @@ Configs: {
 
 		PreloadWorld: {
 			Label: Preload World
-			Tooltip: Recalculates the frame data of all world sections right after entering the world (single player and multiplayer client; not on a listen server or dedicated server). Removes hitches when walking into new areas. In multiplayer, sections that have not arrived from the server yet are picked up by periodic re-scans.
+			Tooltip: Recalculates the frame data of all world sections right after entering the world (single player and multiplayer client; not on a listen server or dedicated server). Removes hitches when walking into new areas. In multiplayer, sections that have not arrived from the server yet are picked up by periodic re-scans. Toggle on the fly with F8.
 		}
 
 		PreloadBudgetMs: {
