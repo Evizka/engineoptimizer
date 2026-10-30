@@ -1,4 +1,5 @@
 using System.ComponentModel;
+using EngineOptimizer.Perf;
 using Terraria.ModLoader;
 using Terraria.ModLoader.Config;
 
@@ -9,6 +10,11 @@ namespace EngineOptimizer;
 public sealed class OptimizerConfig : ModConfig
 {
     public override ConfigScope Mode => ConfigScope.ClientSide;
+
+    // v1.1: глобальный пресет (см. Perf/RuntimeConfig.cs). Со входа в мир
+    // задаёт поведение всех оптимизаций сразу; клавиша F9 меняет на лету.
+    [DefaultValue(OptimizerPreset.Balanced)]
+    public OptimizerPreset Preset { get; set; } = OptimizerPreset.Balanced;
 
     [DefaultValue(true)]
     public bool ShowOverlayOnStart { get; set; } = true;

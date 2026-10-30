@@ -561,7 +561,7 @@ public sealed class SmoothCursorSystem : ModSystem
     {
         try
         {
-            return OptimizerConfig.Instance != null && OptimizerConfig.Instance.SmoothHardwareCursor;
+            return RuntimeConfig.SmoothHardwareCursor; // v1.1: пресет
         }
         catch
         {

@@ -1,9 +1,18 @@
 "Keybinds.Toggle Profiler.DisplayName": Переключить оверлей (F6)
 "Keybinds.Toggle Hardware Cursor.DisplayName": Переключить аппаратный курсор (F7)
 "Keybinds.Toggle World Preload.DisplayName": Переключить предзагрузку мира (F8)
+"Keybinds.Cycle Preset.DisplayName": Переключить пресет оптимизации (F9)
+"ConfigEnums.OptimizerPreset.Balanced": Сбалансированный
+"ConfigEnums.OptimizerPreset.MaxFps": Максимум FPS
+"ConfigEnums.OptimizerPreset.DiagnosticsOnly": Только диагностика
 
 Configs: {
 	OptimizerConfig: {
+		Preset: {
+			Label: Пресет оптимизации
+			Tooltip: "Глобальный переключатель всех оптимизаций разом. Сбалансированный — как настроено ниже; Максимум FPS — все оптимизации включены (босс-режим, параллельный gore, предзагрузка с бюджетом от 5 мс, GC, приоритет процесса); Только диагностика — все патчи движка выключены, мод только измеряет и пишет отчёты. В игре переключается клавишей F9."
+		}
+
 		DisplayName: Оптимизатор движка
 
 		ShowOverlayOnStart: {

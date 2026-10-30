@@ -421,13 +421,15 @@ public static class Telemetry
             Bool(sb, "gc_server", System.Runtime.GCSettings.IsServerGC);
             Str(sb, "gc_latency", System.Runtime.GCSettings.LatencyMode.ToString());
             Num(sb, "gc_heap_mb", GC.GetTotalMemory(false) / 1048576.0);
-            Bool(sb, "reduce_gc_pauses", OptimizerConfig.Instance?.ReduceGcPauses == true);
-            Bool(sb, "defer_autosave_boss", OptimizerConfig.Instance?.DeferAutosaveDuringBoss == true);
-            Bool(sb, "parallel_gore", OptimizerConfig.Instance?.ParallelGore == true);
-            Bool(sb, "parallel_rain", OptimizerConfig.Instance?.ParallelRain == true);
-            Bool(sb, "preload_world", OptimizerConfig.Instance?.PreloadWorld == true);
-            Num(sb, "preload_budget_ms", OptimizerConfig.Instance?.PreloadBudgetMs ?? 0);
-            Bool(sb, "smooth_cursor", OptimizerConfig.Instance?.SmoothHardwareCursor == true);
+            // v1.1: пресет и эффективные значения (конфиг + пресет).
+            Str(sb, "preset", RuntimeConfig.PresetName);
+            Bool(sb, "reduce_gc_pauses", RuntimeConfig.ReduceGcPauses);
+            Bool(sb, "defer_autosave_boss", RuntimeConfig.DeferAutosaveDuringBoss);
+            Bool(sb, "parallel_gore", RuntimeConfig.ParallelGore);
+            Bool(sb, "parallel_rain", RuntimeConfig.ParallelRain);
+            Bool(sb, "preload_world", RuntimeConfig.PreloadWorld);
+            Num(sb, "preload_budget_ms", RuntimeConfig.PreloadBudgetMs);
+            Bool(sb, "smooth_cursor", RuntimeConfig.SmoothHardwareCursor);
             Str(sb, "world", Main.worldName);
             Str(sb, "player", player != null ? player.name ?? "?" : null);
             Num(sb, "screen_width", Main.screenWidth);

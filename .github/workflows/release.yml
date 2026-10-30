@@ -37,13 +37,32 @@ jobs:
           step "ls /tmp/ci/*.tmod" "tmod-exists"
           step "cp /tmp/ci/EngineOptimizer.tmod ." "copy"
 
+          # v1.1: авто-changelog — коммиты между предыдущим тегом и текущим.
+          git clone --quiet https://github.com/${REPO}.git /tmp/src >/dev/null 2>&1 || true
+          CHANGELOG=""
+          if [ -d /tmp/src ]; then
+            cd /tmp/src
+            git fetch --quiet --tags >/dev/null 2>&1 || true
+            PREV=$(git tag --sort=-creatordate 2>/dev/null | grep -v "^${TAG}$" | head -n 1 || true)
+            if [ -n "$PREV" ]; then
+              CHANGELOG=$(git log --oneline --no-merges "${PREV}..${TAG}" 2>/dev/null | sed 's/^/- /' || true)
+            fi
+            cd "$OLDPWD"
+          fi
+
           NOTES="Сборка на tModLoader 2026.08.3.0 (stable).
-          Установка: .tmod положить в %USERPROFILE%\\Documents\\My Games\\Terraria\\tModLoader\\Mods\\ и включить в игре.
-          Изменения — в README.md и в истории коммитов; свежие сборки — ветка ci-build и артефакты Actions."
+          Установка: .tmod положить в %USERPROFILE%\\Documents\\My Games\\Terraria\\tModLoader\\Mods\\ и включить в игре (старую версию заменить).
+
+          ## Изменения
+
+          ${CHANGELOG:-- См. README.md и историю коммитов.}
+
+          Свежие сборки — ветка ci-build и артефакты Actions."
 
           # -R: без checkout раннер не в git-репозитории, gh сам репо не найдёт
           if gh release view "$TAG" -R "$REPO" >/dev/null 2>&1; then
             step "gh release upload '$TAG' EngineOptimizer.tmod --clobber -R '$REPO'" "upload-existing"
+            step "gh release edit '$TAG' -R '$REPO' --notes \"\$NOTES\"" "update-notes"
           else
             step "gh release create '$TAG' EngineOptimizer.tmod -R '$REPO' --title 'EngineOptimizer $TAG' --notes \"\$NOTES\"" "create-with-asset"
           fi

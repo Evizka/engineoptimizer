@@ -87,7 +87,7 @@ public static class WorldPreloader
 
             double budget = EffectiveBudgetMs > 0.0
                 ? EffectiveBudgetMs
-                : OptimizerConfig.Instance?.PreloadBudgetMs ?? 5;
+                : RuntimeConfig.PreloadBudgetMs; // v1.1: пресет
 
             if (budget <= 0.0)
                 return 0.0;
@@ -198,7 +198,7 @@ public static class WorldPreloader
         Active = Total > 0;
         _startedAt = PerfData.Now;
 
-        Log?.Invoke($"World preload queued: {Total} sections, budget {OptimizerConfig.Instance?.PreloadBudgetMs ?? 5} ms/frame");
+        Log?.Invoke($"World preload queued: {Total} sections, budget {RuntimeConfig.PreloadBudgetMs} ms/frame");
     }
 
     // Один срез предзагрузки. budgetMs — верхняя граница (0 = без ограничения,
