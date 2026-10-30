@@ -44,6 +44,9 @@ public static class WorldPreloader
     private static int _skippedNotLoaded;
     private static long _retryAt;
     private const double RetryDelaySeconds = 15.0;
+    // v1.0: выключение по клавише F8 (на лету). Конфиг PreloadWorld —
+    // состояние на входе в мир; F8 переключает в любой момент сессии.
+    public static bool UserDisabled;
     // v0.8.11: центр очереди (секция игрока на момент входа) и окно
     // ускоренной загрузки после входа/телепорта.
     private static int _centerSectionX;
@@ -148,6 +151,10 @@ public static class WorldPreloader
     {
         Reset();
 
+        // v1.0: выключено клавишей F8 — не начинаем.
+        if (UserDisabled)
+            return;
+
         // v0.8.10: работаем и в мультиплеере (клиент, netMode 1): предзагрузка
         // чисто локальная (Reframe не шлёт пакетов), а рывки по недофреймленным
         // секциям у клиента те же. Хост (netMode 2) и сервер остаются ванильными.
@@ -201,6 +208,15 @@ public static class WorldPreloader
         double previousPreloadMs = LastUpdateMs;
         LastUpdateMs = 0;
         EffectiveBudgetMs = 0;
+
+        // v1.0: выключено клавишей F8 — полностью останавливаемся
+        // (в т.ч. отменяем запланированный повторный проход).
+        if (UserDisabled)
+        {
+            if (Active || _retryAt != 0)
+                Reset();
+            return;
+        }
 
         // v0.8.10: в мультиплеере недогруженные секции приходят с сервера
         // позже — перепланируем повторный проход, пока всё не зафреймлено.

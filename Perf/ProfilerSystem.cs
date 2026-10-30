@@ -19,9 +19,11 @@ public sealed class ProfilerSystem : ModSystem
 {
     private const string ToggleKeyName = "Toggle Profiler";
     private const string CursorKeyName = "Toggle Hardware Cursor";
+    private const string PreloadKeyName = "Toggle World Preload";
 
     public static ModKeybind ToggleKey;
     public static ModKeybind CursorKey;
+    public static ModKeybind PreloadKey;
 
     private static OptimizerConfig Settings;
 
@@ -81,6 +83,7 @@ public sealed class ProfilerSystem : ModSystem
     {
         ToggleKey = KeybindLoader.RegisterKeybind(Mod, ToggleKeyName, "F6");
         CursorKey = KeybindLoader.RegisterKeybind(Mod, CursorKeyName, "F7");
+        PreloadKey = KeybindLoader.RegisterKeybind(Mod, PreloadKeyName, "F8");
 
         GoreParallel.Log = s => Mod.Logger.Warn(s);
         RainParallel.Log = s => Mod.Logger.Warn(s);
@@ -153,6 +156,7 @@ public sealed class ProfilerSystem : ModSystem
         Settings = null;
         ToggleKey = null;
         CursorKey = null;
+        PreloadKey = null;
         _overlayBuiltAt = 0;
         _deferStartedAt = 0;
         ResetSectionTimers();
@@ -173,7 +177,7 @@ public sealed class ProfilerSystem : ModSystem
         Telemetry.Reset();
         Telemetry.WriteSession();
 
-        if (Settings != null && Settings.PreloadWorld)
+        if (Settings != null && Settings.PreloadWorld && !WorldPreloader.UserDisabled)
             WorldPreloader.Begin();
 
         Mod.Logger.Info($"World loaded. GC server={System.Runtime.GCSettings.IsServerGC}, latency={System.Runtime.GCSettings.LatencyMode}, cores={Environment.ProcessorCount}, async telemetry=on");
@@ -242,6 +246,28 @@ public sealed class ProfilerSystem : ModSystem
             else if (!Main.dedServ)
             {
                 Main.NewText("Engine Optimizer: hardware cursor ON", 150, 220, 130);
+            }
+        }
+
+        // v1.0: вкл/выкл предзагрузки мира на лету (F8). OFF останавливает
+        // текущую прогрузку немедленно (миникарта размораживается), ON
+        // начинает с текущего положения игрока. Действует до перезапуска
+        // игры; состояние на входе в мир задаёт конфиг PreloadWorld.
+        if (PreloadKey != null && PreloadKey.JustPressed)
+        {
+            WorldPreloader.UserDisabled = !WorldPreloader.UserDisabled;
+            if (WorldPreloader.UserDisabled)
+            {
+                WorldPreloader.Reset();
+                if (!Main.dedServ)
+                    Main.NewText("Engine Optimizer: world preload OFF - F8 to re-enable", 255, 140, 60);
+            }
+            else
+            {
+                if (!Main.gameMenu && !Main.dedServ)
+                    WorldPreloader.Begin();
+                if (!Main.dedServ)
+                    Main.NewText("Engine Optimizer: world preload ON", 150, 220, 130);
             }
         }
 
@@ -827,6 +853,9 @@ public sealed class ProfilerSystem : ModSystem
         string headline = $"Preloading world  {WorldPreloader.Percent:0}%";
         Utils.DrawBorderString(Main.spriteBatch, headline, new Vector2(x + 16f, y + 8f), Color.White, 0.82f);
 
+        // v1.0: подсказка, что прогрузку можно остановить клавишей.
+        Utils.DrawBorderString(Main.spriteBatch, "F8 - cancel / toggle", new Vector2(x + 16f, y + 28f), new Color(150, 155, 165), 0.62f);
+
         string counter = $"{WorldPreloader.Done}/{WorldPreloader.Total} sections";
         double eta = WorldPreloader.EstimatedSecondsLeft;
         if (eta >= 3.0)
@@ -929,10 +958,12 @@ public sealed class ProfilerSystem : ModSystem
             preloadSpikes > 0 ? $"{spikes}  (+{preloadSpikes} preload)" : $"{spikes}",
             spikes > 5 ? Color.Gold : Color.Gainsboro, false);
         Row(1, "preload",
-            WorldPreloader.Active
-                ? $"{WorldPreloader.Percent:0}%  {WorldPreloader.LastUpdateMs:0.0} ms"
-                : (WorldPreloader.FramedSections > 0 ? $"done {WorldPreloader.Seconds:0} s" : "-"),
-            WorldPreloader.Active ? Color.Gold : Color.Gainsboro, false);
+            WorldPreloader.UserDisabled
+                ? "off (F8)"
+                : WorldPreloader.Active
+                    ? $"{WorldPreloader.Percent:0}%  {WorldPreloader.LastUpdateMs:0.0} ms"
+                    : (WorldPreloader.FramedSections > 0 ? $"done {WorldPreloader.Seconds:0} s" : "-"),
+            WorldPreloader.UserDisabled ? Color.OrangeRed : WorldPreloader.Active ? Color.Gold : Color.Gainsboro, false);
         Row(2, "autosave",
             PerfData.SaveCount > 0 ? $"{PerfData.SaveMs:0} ms  x{PerfData.SaveCount}" : "-",
             PerfData.SaveMs > 40.0 ? Color.Gold : Color.Gainsboro, false);

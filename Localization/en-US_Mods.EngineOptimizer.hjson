@@ -1,5 +1,6 @@
 "Keybinds.Toggle Profiler.DisplayName": Mods.EngineOptimizer.Keybinds.Toggle Profiler.DisplayName
 "Keybinds.Toggle Hardware Cursor.DisplayName": Toggle hardware cursor (F7)
+"Keybinds.Toggle World Preload.DisplayName": Toggle world preload (F8)
 
 Configs: {
 	OptimizerConfig: {

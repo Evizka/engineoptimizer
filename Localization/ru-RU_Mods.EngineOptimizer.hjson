@@ -1,5 +1,6 @@
 "Keybinds.Toggle Profiler.DisplayName": Переключить оверлей (F6)
 "Keybinds.Toggle Hardware Cursor.DisplayName": Переключить аппаратный курсор (F7)
+"Keybinds.Toggle World Preload.DisplayName": Переключить предзагрузку мира (F8)
 
 Configs: {
 	OptimizerConfig: {
