@@ -187,7 +187,13 @@ public sealed class ProfilerSystem : ModSystem
         SmoothCursorSystem.AnnounceConflictOnce();
 
         if (RuntimeConfig.PreloadWorld && !WorldPreloader.UserDisabled)
+        {
             WorldPreloader.Begin();
+            // v1.2.1: в мультиплеере баннер не показывается — подсказываем
+            // клавишу выключения одним сообщением в чат.
+            if (Main.netMode == 1 && !Main.dedServ)
+                Main.NewText("Engine Optimizer: world preload started - F8 to disable", 150, 220, 130);
+        }
 
         Mod.Logger.Info($"World loaded. preset={RuntimeConfig.PresetName}, GC server={System.Runtime.GCSettings.IsServerGC}, latency={System.Runtime.GCSettings.LatencyMode}, cores={Environment.ProcessorCount}, async telemetry=on");
     }
@@ -862,7 +868,9 @@ public sealed class ProfilerSystem : ModSystem
 
     private static bool DrawPreloadBanner()
     {
-        if (!WorldPreloader.Active || Main.gameMenu || Main.dedServ)
+        // v1.2.1: баннер только в одиночной игре — в мультиплеере повторные
+        // проходы заставляли его мигать каждые 15 с (прогресс видно в F6).
+        if (!WorldPreloader.Active || Main.gameMenu || Main.dedServ || Main.netMode != 0)
             return true;
 
         var pixel = TextureAssets.MagicPixel.Value;

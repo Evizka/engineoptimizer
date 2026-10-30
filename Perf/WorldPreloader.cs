@@ -44,6 +44,11 @@ public static class WorldPreloader
     private static int _skippedNotLoaded;
     private static long _retryAt;
     private const double RetryDelaySeconds = 15.0;
+    // v1.2.1: повторные проходы мультиплеера ограничены — сервер всё равно
+    // не пришлёт дальние секции, а бесконечные перепланирования мигали
+    // баннером каждые 15 с.
+    private static int _retryCount;
+    private const int MaxMultiplayerRetries = 3;
     // v1.0: выключение по клавише F8 (на лету). Конфиг PreloadWorld —
     // состояние на входе в мир; F8 переключает в любой момент сессии.
     public static bool UserDisabled;
@@ -147,9 +152,12 @@ public static class WorldPreloader
         ResetSectionCursor();
     }
 
-    public static void Begin()
+    public static void Begin(bool isRetry = false)
     {
+        // v1.2.1: повторный проход не сбрасывает счётчик попыток.
+        int keepRetries = isRetry ? _retryCount : 0;
         Reset();
+        _retryCount = keepRetries;
 
         // v1.0: выключено клавишей F8 — не начинаем.
         if (UserDisabled)
@@ -226,7 +234,7 @@ public static class WorldPreloader
                 return;
             _retryAt = 0;
             if (Main.netMode != 2 && !Main.dedServ && !Main.gameMenu)
-                Begin();
+                Begin(true);
             return;
         }
 
@@ -464,8 +472,13 @@ public static class WorldPreloader
 
         // v0.8.10: мультиплеер — что-то ещё не загружено с сервера;
         // вернёмся к этому, когда секции доедут (раз в RetryDelaySeconds).
-        if (_skippedNotLoaded > 0 && Main.netMode != 2 && !Main.dedServ && !Failed)
+        // v1.2.1: не чаще MaxMultiplayerRetries попыток и только если проход
+        // дал прогресс (0 новых секций = сервер больше ничего не шлёт —
+        // смысла пересканировывать весь мир нет).
+        if (_skippedNotLoaded > 0 && Main.netMode == 1 && !Main.dedServ && !Failed
+            && FramedSections > 0 && _retryCount < MaxMultiplayerRetries)
         {
+            _retryCount++;
             _retryAt = PerfData.Now + (long)(RetryDelaySeconds * Stopwatch.Frequency);
             if (FramedSections > 0 || _skippedNotLoaded != Total)
                 Log?.Invoke($"World preload: {_skippedNotLoaded} sections are not loaded yet (multiplayer), re-scan in {(int)RetryDelaySeconds} s");
