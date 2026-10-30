@@ -249,17 +249,40 @@ public sealed class SmoothCursorSystem : ModSystem
 
     private static void DrawFailsafeCursor()
     {
-        // Текстура ванильного курсора (как в примере tML: Main.cursorTextures[0]).
-        var textures = Main.cursorTextures;
-        if (textures == null || textures.Length == 0 || textures[0] == null || Main.spriteBatch == null)
+        // Рисуем стрелку сами из MagicPixel: не зависим от внутренних
+        // текстур tML (в 2026.08 имя массива курсоров недоступно модам),
+        // зато гарантированно компилируется и видна на любом фоне:
+        // белая стрелка с чёрной обводкой.
+        var pixel = TextureAssets.MagicPixel;
+        if (pixel == null || Main.spriteBatch == null)
             return;
 
         _failsafeDrawnFrame = _frame;
 
         var sb = Main.spriteBatch;
         sb.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend);
-        float scale = Math.Max(0.8f, Main.cursorScale);
-        sb.Draw(textures[0], new Vector2(Main.mouseX, Main.mouseY), null, Color.White * 0.95f, 0f, Vector2.Zero, scale, SpriteEffects.None, 0f);
+
+        int x = Main.mouseX;
+        int y = Main.mouseY;
+        const int N = 12;
+
+        for (int pass = 0; pass < 2; pass++)
+        {
+            // pass 0 — чёрная обводка (со сдвигом), pass 1 — белая стрелка.
+            int ox = x + (pass == 0 ? 1 : 0);
+            int oy = y + (pass == 0 ? 1 : 0);
+            var color = pass == 0 ? Color.Black * 0.85f : Color.White * 0.95f;
+
+            for (int i = 0; i < N; i++)
+            {
+                int h = Math.Max(2, (int)((N - i) * 1.6f));
+                sb.Draw(pixel.Value, new Rectangle(ox + i, oy + i, 2, h), color);
+            }
+
+            // «хвост» стрелки.
+            sb.Draw(pixel.Value, new Rectangle(ox + 3, oy + 7, 2, 9), color);
+        }
+
         sb.End();
 
         if (!_failsafeAnnounced)
