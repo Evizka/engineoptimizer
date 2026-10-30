@@ -234,7 +234,7 @@ public sealed class SmoothCursorSystem : ModSystem
             return false;
 
         // Геймпад с включённым курсором геймпада — штатное скрытие мыши.
-        if (PlayerInput.UsingGamePad && PlayerInput.SettingsForUI.ShowGamepadCursor)
+        if (PlayerInput.UsingGamepad && PlayerInput.SettingsForUI.ShowGamepadCursor)
             return false;
 
         try
@@ -249,8 +249,9 @@ public sealed class SmoothCursorSystem : ModSystem
 
     private static void DrawFailsafeCursor()
     {
-        var texture = TextureAssets.Cursor;
-        if (texture == null || texture.State != Terraria.UI.AssetState.Completed || Main.spriteBatch == null)
+        // Текстура ванильного курсора (как в примере tML: Main.cursorTextures[0]).
+        var textures = Main.cursorTextures;
+        if (textures == null || textures.Length == 0 || textures[0] == null || Main.spriteBatch == null)
             return;
 
         _failsafeDrawnFrame = _frame;
@@ -258,7 +259,7 @@ public sealed class SmoothCursorSystem : ModSystem
         var sb = Main.spriteBatch;
         sb.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend);
         float scale = Math.Max(0.8f, Main.cursorScale);
-        sb.Draw(texture.Value, Main.MouseScreen, null, Color.White * 0.95f, 0f, Vector2.Zero, scale, SpriteEffects.None, 0f);
+        sb.Draw(textures[0], new Vector2(Main.mouseX, Main.mouseY), null, Color.White * 0.95f, 0f, Vector2.Zero, scale, SpriteEffects.None, 0f);
         sb.End();
 
         if (!_failsafeAnnounced)
