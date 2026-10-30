@@ -20,10 +20,12 @@ public sealed class ProfilerSystem : ModSystem
     private const string ToggleKeyName = "Toggle Profiler";
     private const string CursorKeyName = "Toggle Hardware Cursor";
     private const string PreloadKeyName = "Toggle World Preload";
+    private const string PresetKeyName = "Cycle Preset";
 
     public static ModKeybind ToggleKey;
     public static ModKeybind CursorKey;
     public static ModKeybind PreloadKey;
+    public static ModKeybind PresetKey;
 
     private static OptimizerConfig Settings;
 
@@ -32,7 +34,7 @@ public sealed class ProfilerSystem : ModSystem
     private bool _threadPoolTuned;
     private GCLatencyMode _previousLatency;
 
-    private const int OverlayRows = 8;
+    private const int OverlayRows = 9; // v1.1: +строка preset
 
     // Оверлей кешируется: строки пересобираются 4 раза в секунду.
     private static readonly string[] OverlayLabelsLeft = new string[OverlayRows];
@@ -84,6 +86,7 @@ public sealed class ProfilerSystem : ModSystem
         ToggleKey = KeybindLoader.RegisterKeybind(Mod, ToggleKeyName, "F6");
         CursorKey = KeybindLoader.RegisterKeybind(Mod, CursorKeyName, "F7");
         PreloadKey = KeybindLoader.RegisterKeybind(Mod, PreloadKeyName, "F8");
+        PresetKey = KeybindLoader.RegisterKeybind(Mod, PresetKeyName, "F9");
 
         GoreParallel.Log = s => Mod.Logger.Warn(s);
         RainParallel.Log = s => Mod.Logger.Warn(s);
@@ -157,6 +160,7 @@ public sealed class ProfilerSystem : ModSystem
         ToggleKey = null;
         CursorKey = null;
         PreloadKey = null;
+        PresetKey = null;
         _overlayBuiltAt = 0;
         _deferStartedAt = 0;
         ResetSectionTimers();
@@ -177,10 +181,12 @@ public sealed class ProfilerSystem : ModSystem
         Telemetry.Reset();
         Telemetry.WriteSession();
 
-        if (Settings != null && Settings.PreloadWorld && !WorldPreloader.UserDisabled)
+        RuntimeConfig.SetPreset(OptimizerConfig.Instance?.Preset ?? OptimizerPreset.Balanced);
+
+        if (RuntimeConfig.PreloadWorld && !WorldPreloader.UserDisabled)
             WorldPreloader.Begin();
 
-        Mod.Logger.Info($"World loaded. GC server={System.Runtime.GCSettings.IsServerGC}, latency={System.Runtime.GCSettings.LatencyMode}, cores={Environment.ProcessorCount}, async telemetry=on");
+        Mod.Logger.Info($"World loaded. preset={RuntimeConfig.PresetName}, GC server={System.Runtime.GCSettings.IsServerGC}, latency={System.Runtime.GCSettings.LatencyMode}, cores={Environment.ProcessorCount}, async telemetry=on");
     }
 
     public override void OnWorldUnload()
@@ -269,6 +275,22 @@ public sealed class ProfilerSystem : ModSystem
                 if (!Main.dedServ)
                     Main.NewText("Engine Optimizer: world preload ON", 150, 220, 130);
             }
+        }
+
+        // v1.1: глобальный пресет (F9): balanced -> max fps -> diagnostics.
+        // Переключает все оптимизации разом; действует до перезапуска игры
+        // (умолчание на входе в мир — из конфига мода).
+        if (PresetKey != null && PresetKey.JustPressed)
+        {
+            var preset = RuntimeConfig.Cycle();
+            string what = preset == OptimizerPreset.MaxFps
+                ? "all optimizations on"
+                : preset == OptimizerPreset.DiagnosticsOnly
+                    ? "all engine patches off, diagnostics only"
+                    : "as configured";
+            if (!Main.dedServ)
+                Main.NewText($"Engine Optimizer preset: {RuntimeConfig.PresetName} ({what}) - F9 to change", 130, 190, 255);
+            Mod.Logger.Info($"Preset changed to {RuntimeConfig.PresetName}");
         }
 
         // v0.8.6: пока идёт бой, предзагрузка мира на паузе — её бюджет
@@ -391,7 +413,7 @@ public sealed class ProfilerSystem : ModSystem
 
     private void ApplyGcSettings(bool want)
     {
-        if (Settings == null || !Settings.ReduceGcPauses || Main.dedServ)
+        if (!RuntimeConfig.ReduceGcPauses || Main.dedServ)
             want = false;
         else if (!want)
             want = !Main.gameMenu;
@@ -441,7 +463,7 @@ public sealed class ProfilerSystem : ModSystem
     // Минимум воркеров пула = числу ядер: меньше лагов на ramp-up.
     private void TuneThreadPool()
     {
-        if (_threadPoolTuned || Settings == null || !Settings.ReduceGcPauses)
+        if (_threadPoolTuned || !RuntimeConfig.ReduceGcPauses)
             return;
 
         _threadPoolTuned = true;
@@ -472,7 +494,7 @@ public sealed class ProfilerSystem : ModSystem
 
     private void ApplyProcessPriority()
     {
-        if (_priorityBoosted || Settings == null || !Settings.BoostProcessPriority || Main.dedServ)
+        if (_priorityBoosted || !RuntimeConfig.BoostProcessPriority || Main.dedServ)
             return;
 
         try
@@ -720,7 +742,7 @@ public sealed class ProfilerSystem : ModSystem
 
     private static void OnDoUpdateAutoSave(On_Main.orig_DoUpdate_AutoSave orig)
     {
-        if (Settings == null || !Settings.DeferAutosaveDuringBoss || Main.netMode != 0)
+        if (!RuntimeConfig.DeferAutosaveDuringBoss || Main.netMode != 0)
         {
             RunAutoSave(orig);
             return;
@@ -978,6 +1000,9 @@ public sealed class ProfilerSystem : ModSystem
         Row(7, "boss perf",
             BossPerfMode.Active ? "on (" + BossPerfMode.HookSummary() + ")" : (BossPerfMode.AnyHook ? "ready" : "-"),
             BossPerfMode.Active ? Color.Gold : Color.Gainsboro, false);
+        // v1.1: глобальный пресет (F9).
+        Row(8, "preset", RuntimeConfig.PresetName,
+            RuntimeConfig.Preset == OptimizerPreset.Balanced ? Color.Gainsboro : Color.SkyBlue, false);
 
         _overlayBuiltAt = PerfData.Now;
     }

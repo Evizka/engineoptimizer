@@ -101,8 +101,7 @@ public sealed class BossPerfMode : ModSystem
         if (needInstall && PerfData.MsSince(_lastInstallTry) >= 10000.0)
             TryInstall();
 
-        var config = OptimizerConfig.Instance;
-        bool enabled = config != null && config.BossPerfMode;
+        bool enabled = RuntimeConfig.BossPerfMode; // v1.1: пресет
 
         bool boss = enabled && ScanBoss();
         if (boss)

@@ -1,9 +1,18 @@
 "Keybinds.Toggle Profiler.DisplayName": Mods.EngineOptimizer.Keybinds.Toggle Profiler.DisplayName
 "Keybinds.Toggle Hardware Cursor.DisplayName": Toggle hardware cursor (F7)
 "Keybinds.Toggle World Preload.DisplayName": Toggle world preload (F8)
+"Keybinds.Cycle Preset.DisplayName": Cycle optimization preset (F9)
+"ConfigEnums.OptimizerPreset.Balanced": Balanced
+"ConfigEnums.OptimizerPreset.MaxFps": Max FPS
+"ConfigEnums.OptimizerPreset.DiagnosticsOnly": Diagnostics only
 
 Configs: {
 	OptimizerConfig: {
+		Preset: {
+			Label: Optimization preset
+			Tooltip: "One global switch for all optimizations at once. Balanced - as configured below; Max FPS - everything on (boss mode, parallel gore, preload with a 5 ms+ budget, GC, process priority); Diagnostics only - all engine patches off, the mod only measures and writes reports. Cycle in game with F9."
+		}
+
 		DisplayName: Optimizer Config
 
 		ShowOverlayOnStart: {

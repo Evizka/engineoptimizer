@@ -73,7 +73,7 @@ public static class GoreParallel
     private static Exception _error;
     private static int _errors;
 
-    public static bool Enabled => !Failed && OptimizerConfig.Instance?.ParallelGore == true;
+    public static bool Enabled => !Failed && RuntimeConfig.ParallelGore; // v1.1: пресет
 
     public static void Reset()
     {
@@ -227,7 +227,7 @@ public static class RainParallel
     private static int _phaseId;
     private static Exception _error;
 
-    public static bool Enabled => !Failed && OptimizerConfig.Instance?.ParallelRain == true;
+    public static bool Enabled => !Failed && RuntimeConfig.ParallelRain; // v1.1: пресет
 
     public static void Reset()
     {
